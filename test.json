@@ -1,0 +1,41 @@
+{
+  "query": "mai mātauranga whakarerekē",
+  "type": "common_uncommon",
+  "total": 0,
+  "maori": 0,
+  "unhandled": 0,
+  "google": {
+    "total": 0,
+    "maori": 0,
+    "unhandled": 0,
+    "pages": 1,
+    "1": {
+      "total": 0,
+      "maori": 0,
+      "urls": [
+        {
+          "url": "",
+          "urlHash": "",
+          "unhandled": true
+        }
+      ]
+    }
+  },
+  "google_api": {
+    "total": 0,
+    "maori": 0,
+    "unhandled": 0,
+    "pages": 1,
+    "1": {
+      "total": 0,
+      "maori": 0,
+      "urls": [
+        {
+          "url": "",
+          "urlHash": "",
+          "unhandled": true
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+    "query": "harakore tuaiwa whakawākia",
+    "type": "phrase",
+    "total": 0,
+    "maori": 0,
+    "unhandled": 0,
+    "google": {
+        "total": 0,
+        "maori": 0,
+        "unhandled": 0,
+        "items": []
+    },
+    "google_api": {
+        "total": 0,
+        "maori": 0,
+        "unhandled": 0,
+        "items": []
+    },
+    "bing": {
+        "total": 0,
+        "maori": 0,
+        "unhandled": 0,
+        "items": []
+    },
+    "bing_api": {
+        "total": 0,
+        "maori": 0,
+        "unhandled": 0,
+        "items": []
+    }
+}

@@ -1,0 +1,54 @@
+{
+  "chromedriver": "C:\\chromedriver\\chromedriver.exe",
+  "google": {
+    "cx": "e192cf0a1cc3f45f2",
+    "key": "AIzaSyAwC7LMq2h97lAv_7DZ7gtvus5K1T8R5io"
+  },
+  "bing": {
+    "cx": "e192cf0a1cc3f45f2",
+    "key": "AIzaSyAwC7LMq2h97lAv_7DZ7gtvus5K1T8R5io"
+  },
+  "startPage": 1,
+  "pagesToGet": 10,
+  "words": 5,
+  "amount": 1,
+  "blacklist": [
+    "www.nzqa.govt.nz",
+    "quizlet.com",
+    "maoridictionary.co.nz",
+    "www.instagram.com",
+    "www.facebook.com"
+  ],
+  "languages": {
+    "Hawaiian": {
+      "path": "udhr/udhr-hawaiian.pdf",
+      "cr": "countryUS",
+      "hl": "en",
+      "gl": "us"
+    },
+    "Māori": {
+      "path": "udhr/udhr-maori.pdf",
+      "cr": "countryNZ",
+      "hl": "mi",
+      "gl": "nz"
+    },
+    "Samoan": {
+      "path": "udhr/udhr-samoan.pdf",
+      "cr": "countryWS",
+      "hl": "en",
+      "gl": "ws"
+    },
+    "Tahitian": {
+      "path": "udhr/udhr-tahitian.pdf",
+      "cr": "countryPF",
+      "hl": "en",
+      "gl": "pf"
+    },
+    "Tongan": {
+      "path": "udhr/udhr-tongan.pdf",
+      "cr": "countryTO",
+      "hl": "en",
+      "gl": "to"
+    }
+  }
+}
