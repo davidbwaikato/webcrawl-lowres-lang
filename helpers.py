@@ -1,6 +1,7 @@
 import os
 import json
 import hashlib
+from const import GOOGLE, GOOGLE_API, BING, BING_API, QUERY, TYPE, TOTAL, MAORI, UNHANDLED, ITEMS
 
 
 def read_file(filename):
@@ -56,34 +57,34 @@ def initialize_query(query_dict):
     if os.path.exists(filename):
         return 0
     data = {
-        "query": query,
-        "type": query_type,
-        "total": 0,
-        "maori": 0,
-        "unhandled": 0,
-        "google": {
-            "total": 0,
-            "maori": 0,
-            "unhandled": 0,
-            "items": []
+        QUERY: query,
+        TYPE: query_type,
+        TOTAL: 0,
+        MAORI: 0,
+        UNHANDLED: 0,
+        GOOGLE: {
+            TOTAL: 0,
+            MAORI: 0,
+            UNHANDLED: 0,
+            ITEMS: []
         },
-        "google_api": {
-            "total": 0,
-            "maori": 0,
-            "unhandled": 0,
-            "items": []
+        GOOGLE_API: {
+            TOTAL: 0,
+            MAORI: 0,
+            UNHANDLED: 0,
+            ITEMS: []
         },
-        "bing": {
-            "total": 0,
-            "maori": 0,
-            "unhandled": 0,
-            "items": []
+        BING: {
+            TOTAL: 0,
+            MAORI: 0,
+            UNHANDLED: 0,
+            ITEMS: []
         },
-        "bing_api": {
-            "total": 0,
-            "maori": 0,
-            "unhandled": 0,
-            "items": []
+        BING_API: {
+            TOTAL: 0,
+            MAORI: 0,
+            UNHANDLED: 0,
+            ITEMS: []
         }
     }
     save_to_json(data, filename)

@@ -1,10 +1,11 @@
 import os
+from const import GOOGLE, GOOGLE_SELENIUM, GOOGLE_API, BING, BING_API, BING_SELENIUM, TOTAL, TOTAL, UNHANDLED, ITEMS, URL, URL_HASH, QUERY
 from extract import extract
 from queries import generate_all
 from helpers import save_to_json, hash_url, initialize_query, read_file, read_json, read_config, remove_blacklisted
 from search import google, google_selenium, google_api
-from selenium.webdriver.common.by import By
 from selenium import webdriver
+# pip install -r requirements.txt
 
 
 def get_all_query_files(directory="queries"):
@@ -18,48 +19,43 @@ def read_and_fetch(filename, type, page=1, **kwargs):
     driver = None
     config = read_config()
     # Get where to save the data
-    if type == "google":
-        engine = "google"
-    elif type == "google_selenium":
-        engine = "google"
+    if type == GOOGLE_SELENIUM:
         driver = webdriver.Chrome(executable_path=config['chromedriver'])
-    elif type == "google_api":
-        engine = "google_api"
-    elif type == "bing":
-        engine = "bing"
-    elif type == "bing_api":
-        engine = "bing_api"
+        engine = GOOGLE
+    elif type == BING_SELENIUM:
+        engine = BING
+    else:
+        engine = type
     count = 1
     urls = []
-    query = data["query"]
+    query = data[QUERY]
     while count <= page:
-        if type == "google":
+        if type == GOOGLE:
             temp = google(query, count)
-        elif type == "google_selenium":
+        elif type == GOOGLE_SELENIUM:
             temp = google_selenium(query, driver, count)
-        elif type == "google_api":
+        elif type == GOOGLE_API:
             temp = google_api(query, config['google']['key'],
                               config['google']['cx'], count, **kwargs)
         if not temp:
             break
         urls.extend(temp)
         count += 1
-        print(temp)
     # Quit the driver after the loop ends
     if driver:
         driver.quit()
     # Remove blacklisted URLs
     urls = remove_blacklisted(urls, config['blacklist'])
     # Remove duplicates
-    existing_hashes = {item["url_hash"] for item in data[engine]["items"]}
-    new_urls = [{"url": url, "url_hash": hash_url(url), "unhandled": True}
+    existing_hashes = {item[URL_HASH] for item in data[engine][ITEMS]}
+    new_urls = [{URL: url, URL_HASH: hash_url(url), UNHANDLED: True}
                 for url in urls if hash_url(url) not in existing_hashes]
     # Update data
-    data["total"] += len(urls)
-    data["unhandled"] += len(urls)
-    data[engine]["total"] += len(urls)
-    data[engine]["unhandled"] += len(urls)
-    data[engine]["items"].extend(new_urls)
+    data[TOTAL] += len(urls)
+    data[UNHANDLED] += len(urls)
+    data[engine][TOTAL] += len(urls)
+    data[engine][UNHANDLED] += len(urls)
+    data[engine][ITEMS].extend(new_urls)
     print(data)
     # Save the updated data
     # save_to_json(data, filename)
@@ -82,7 +78,7 @@ if __name__ == "__main__":
     # Search with the queries
     query_files = get_all_query_files()
     for file in query_files:
-        read_and_fetch(file, "google_api")
+        read_and_fetch(file, GOOGLE_SELENIUM)
         break
 
 # Todo: Add Bing search
