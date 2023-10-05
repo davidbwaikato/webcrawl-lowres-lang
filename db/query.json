@@ -1,0 +1,19 @@
+{
+  "id": 0,
+  "query": "abc",
+  "type": "single/combined/phrase/common_uncommon",
+  "urls": [
+    {
+      "id": 0,
+      "query_id": 0,
+      "type": "google/google_api/bing/bing_api",
+      "url": "",
+      "url_hash": "",
+      "file_hash": "",
+      "doc_type": "html/pdf/doc/docx",
+      "unhandled": true,
+      "full_lan": "",
+      "paragraph_lan": 0
+    }
+  ]
+}

@@ -8,16 +8,25 @@
     "cx": "e192cf0a1cc3f45f2",
     "key": "AIzaSyAwC7LMq2h97lAv_7DZ7gtvus5K1T8R5io"
   },
-  "startPage": 1,
-  "pagesToGet": 10,
-  "words": 5,
-  "amount": 1,
+  "start_page": 1,
+  "word_count": 3,
+  "query_count": 5,
+  "search_type": "google_selenium",
+  "num_threads": 5,
+  "pages": 10,
   "blacklist": [
     "www.nzqa.govt.nz",
+    "nzqa.govt.nz",
     "quizlet.com",
     "maoridictionary.co.nz",
     "www.instagram.com",
-    "www.facebook.com"
+    "m.instagram.com",
+    "instagram.com",
+    "www.facebook.com",
+    "m.facebook.com",
+    "facebook.com",
+    "www.google.com",
+    "google.com"
   ],
   "languages": {
     "Hawaiian": {

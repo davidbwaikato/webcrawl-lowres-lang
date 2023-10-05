@@ -63,7 +63,8 @@ def order_and_remove_duplicates(queries):
 
 
 def generate_all(lang, word_count=3, query_count=5):
-    """Generate all types of queries for a language"""
+    """Create all types of queries for a language"""
+    print("Creating queries.")
     word_dict = load_language_dictionary(lang)
     if word_dict is None:
         exit()

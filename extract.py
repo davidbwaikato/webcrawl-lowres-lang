@@ -1,4 +1,5 @@
 import re
+import os
 from collections import Counter
 from pdfminer.high_level import extract_text
 from helpers import read_config, save_to_json
@@ -23,7 +24,7 @@ def get_common_words(tokens, min_length=3):
     return word_freq.most_common()
 
 
-def extract():
+def extract(reset=False):
     """Process each PDF and save results to JSON"""
     config = read_config()
     languages = config['languages']
@@ -31,6 +32,7 @@ def extract():
         text = extract_udhr_text(item['path'])
         tokens = preprocess_udhr_text(text)
         common_words = get_common_words(tokens)
-        filename = f"dicts/common_words_{language.lower()}"
-        filename = save_to_json(dict(common_words), filename)
-        print(f"Processed {language} and saved to {filename}")
+        filename = f"dicts/common_words_{language.lower()}.json"
+        # Check if file exists and act according to `reset` parameter
+        if not os.path.exists(filename) or reset:
+            save_to_json(dict(common_words), filename)
