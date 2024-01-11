@@ -1,6 +1,8 @@
 import os
 import time
+import hashlib
 import argparse
+import requests
 from const import GOOGLE, GOOGLE_SELENIUM, GOOGLE_API, BING, BING_API, BING_SELENIUM, TOTAL, TOTAL, UNHANDLED, ITEMS, URL, URL_HASH, QUERY
 from extract import extract
 from queries import generate_all
@@ -10,11 +12,20 @@ from selenium import webdriver
 import threading
 from selenium.webdriver.chrome.options import Options
 from fake_useragent import UserAgent
-from sql import create, insert_query_if_not_exists, get_all_queries, get_url_counts_by_query_id, insert_urls_many, get_all_urls, get_url_counts_by_type, set_query_as_handled, set_all_queries_unhandled
+from sql import get_url_file_hash, get_url_by_id, save_bing_url, create, insert_query_if_not_exists, get_all_queries, get_url_counts_by_query_id, insert_urls_many, get_all_urls, get_url_counts_by_type, set_query_as_handled, hash_exists_in_db, set_url_as_handled, set_all_queries_unhandled, update_url
 from sql import count_query_types, count_urls_per_query_type, get_top_3_queries_with_most_urls, query_with_least_urls, count_queries_with_zero_urls_by_type, get_most_common_urls
+from nlp import extract_text_from_file, run_nlp_algorithms, clean_text
+from lingua import Language
+requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
 # pip install -r requirements.txt
-
 stop_event = threading.Event()
+import datetime
+from requests.exceptions import Timeout
+from urllib.parse import urlparse, parse_qs
+import base64
+
+# py app.py -nlp -nt 20
+
 
 # def get_all_query_files(directory="queries"):
 #     """Returns a list of all files in a directory"""
@@ -52,12 +63,71 @@ def get_args():
                         default=False, help="Flag to show details")
     parser.add_argument("-sau", "--set_all_unhandled", action="store_true",
                         default=False, help="Flag to set all queries as unhandled")
+    parser.add_argument("-cu", "--clean_urls", action="store_true",
+                        default=False, help="Testing flag")
     parser.add_argument("-test", "--test", action="store_true",
                         default=False, help="Testing flag")
     return parser.parse_args()
 
+def delete_file(path):
+    try:
+        os.remove(path)
+    except FileNotFoundError:
+        print(f"File not found: {path}")
+    except Exception as e:
+        print(f"Error deleting file: {e}")
 
-def read_and_fetch(query, type, page=1, **kwargs):
+def set_values_from_existing(url_id, file_hash):
+    existing = get_url_file_hash(url_id, file_hash)
+    if existing is None or existing[7] == 1:
+        return 0
+    update_url(url_id, file_hash, existing[6], existing[8], existing[10], existing[9])
+    return 1
+
+def download_and_save(url_id, url, save_dir='downloads', timeout=10):
+    try:
+        # Ensure the save directory exists
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
+        # Fetch the content with a timeout and allow redirects
+        response = requests.get(url, verify=False, timeout=timeout, allow_redirects=True)
+        if response.status_code != 200:
+            return 0
+        # Hash the content
+        sha256_hash = hashlib.sha256()
+        sha256_hash.update(response.content)
+        file_hash = sha256_hash.hexdigest()
+        # Identify the content type
+        content_type = response.headers.get('content-type')
+        if "html" in content_type:
+            doc_type = "html"
+        elif "pdf" in content_type:
+            doc_type = "pdf"
+        elif "msword" in content_type or "vnd.openxmlformats-officedocument" in content_type:
+            doc_type = "docx"
+        else:
+            print("Unknown content type: ", content_type)
+            doc_type = "unknown"
+        filename = file_hash + "." + doc_type
+        filepath = os.path.join(save_dir, filename)
+        # Save the content if the hash does not exist in the database
+        if os.path.exists(filepath):
+            # Try to search and assign database value first
+            if set_values_from_existing(url_id, file_hash) == 1:
+                return 1
+            print(f"File with hash {file_hash} already exists in downloads.")
+            return {"path": filepath, "hash": file_hash, "doc_type": doc_type}
+        with open(filepath, 'wb') as f:
+            f.write(response.content)
+        return {"path": filepath, "hash": file_hash, "doc_type": doc_type}
+    except requests.exceptions.Timeout:
+        print("Request timed out: ", url)
+        return 0
+    except Exception as e:
+        print(f"Error getting file: {e}")
+        return 0
+    
+def search_and_fetch(query, type, page=1, **kwargs):
     """Fetch Google search results and update"""
     query_id = query[0]
     text = query[1]
@@ -110,26 +180,54 @@ def read_and_fetch(query, type, page=1, **kwargs):
     # print(url_data)
     insert_urls_many(url_data)
 
-
-# def initialize_query(query_dict, lan):
-#     """Initialize a query in the SQLite database."""
-#     # Extract the query and its type from the dictionary
-#     query = query_dict["query"]
-#     query_type = query_dict["type"]
-#     # Insert the query
-#     return insert_query_if_not_exists(query, query_type, lan)
-
 def search_worker(sub_queries, search_type, pages):
     for query in sub_queries:
         # Check if the stop event is set
         if stop_event.is_set():
             return
-        read_and_fetch(query, search_type, pages)
-        # x = get_url_counts_by_query_id(query[0])
-        # print(query[0], query[1], x)
+        search_and_fetch(query, search_type, pages)
         time.sleep(5)
-
-
+# 400
+def nlp_worker(sub_urls, detect:Language, tcount):
+    for url in sub_urls:
+        if url[7] == 0:
+            #print("{0}".format(url))
+            #print("{0} {1}".format(url[0], url[7]))
+            continue
+        now = datetime.datetime.now()
+        print(f"{tcount} ============ {now.time()} ============ {url[0]}")
+        try:
+            # Check if the stop event is set
+            if stop_event.is_set():
+                return
+            result = download_and_save(url[0], url[3])
+            if result == 1:
+                print(f"{tcount} ============ ============ EXISTING {url[0]}")
+                continue
+            if result == 0:
+                set_url_as_handled(url[0])
+            extracted_text = extract_text_from_file(result["path"], result["doc_type"])
+            #extracted_text = extract_text_from_file("downloads\\test.pdf", "pdf")
+            if extracted_text == None:
+                set_url_as_handled(url[0])
+                continue
+            cleaned_extracted_text = clean_text(extracted_text)
+            langs = run_nlp_algorithms(cleaned_extracted_text, Language.MAORI)
+            if langs["lingua"]["lang"] == None:
+                set_url_as_handled(url[0])
+                continue
+            if langs["lingua"]["lang"] != detect.name:
+                delete_file(result["path"])
+            update_url(url[0], result["hash"], result["doc_type"], langs["lingua"]["lang"], langs["lingua"]["condifence"], langs["lingua"]["percentage"])
+            # print("{0} {1} {2} HANDLED".format(tcount, url[0], now.time()))
+        except FileNotFoundError as e:
+            # print("{0} {1} {2} HANDLED".format(tcount, url[0], now.time()))
+            set_url_as_handled(url[0])
+            print(f"{tcount} File not found")
+        except Exception as e:
+            set_url_as_handled(url[0])
+            print(f"{tcount} Error in NLP: {e}")
+        
 def validate_args(args):
     try:
         # Validate lang
@@ -150,7 +248,6 @@ def validate_args(args):
     except Exception as e:
         print(e)
         exit(0)
-
 
 def display(lan):
     queries = get_all_queries(lan)
@@ -182,7 +279,21 @@ def display(lan):
     print("Total Queries:", len(queries))
     print("Total Urls:", total)
     print(f"Total {lan}:", lan_total)
+    exit(0)
 
+def clean_urls(urls):
+    for url in urls:
+        if 'bing.com' in url[3]:
+            query_params = parse_qs(urlparse(url[3]).query)
+            if 'u' in query_params:
+                encoded_url = query_params['u'][0]
+                try:
+                    temp = "{0}{1}".format(encoded_url[2:], "==")
+                    final_url = base64.b64decode(temp).decode("utf-8")
+                    print("Saving {0}".format(url[0]))
+                    save_bing_url(url[0], final_url)
+                except Exception:
+                    continue
 
 if __name__ == "__main__":
     args = get_args()
@@ -203,6 +314,12 @@ if __name__ == "__main__":
     if args.set_all_unhandled:
         set_all_queries_unhandled()
         print("Set all queries as unhandled.")
+    if args.clean_urls:
+        print("Cleaning URLs in database (this might take a while).")
+        urls = get_all_urls()
+        final_urls = clean_urls(urls)
+        print("Finished cleaning URLs in database.")
+        exit(0)
     try:
         config = read_config()
         validate_args(args)
@@ -217,7 +334,6 @@ if __name__ == "__main__":
         unhandled_queries = args.unhandled_queries
         # Create the database
         create(reset=False)
-
         if args.display:
             display(lan)
             exit(0)
@@ -226,6 +342,7 @@ if __name__ == "__main__":
             extract(reset=False)
         # Queries
         if args.create_queries or args.all:
+            print("Running Queries.")
             queries = generate_all(lan, word_count, query_count)
             # foreach query, save it in the database
             unique = 0
@@ -237,6 +354,7 @@ if __name__ == "__main__":
             print(f"Created {unique} unique queries")
         # Search
         if args.search or args.all:
+            print("Running Search.")
             # Get all relevant queries from the database
             queries = get_all_queries(lan, unhandled_queries)
             # Split queries into sub-lists for each thread
@@ -262,7 +380,31 @@ if __name__ == "__main__":
             print("All threads have finished.")
         # NLP
         if args.nlp or args.all:
-            print("Running NLP.")
+            # Get all relevant queries from the database
+            urls = get_all_urls(unhandled_queries)
+            # Split queries into sub-lists for each thread
+            split_urls = [urls[i::num_threads]
+                             for i in range(num_threads)]
+            # Create and start threads
+            threads = []
+            print("Starting nlp threads.")
+            tcount = 1
+            for sub_urls in split_urls:
+                t = threading.Thread(target=nlp_worker, args=(
+                    sub_urls,Language.MAORI, tcount))
+                threads.append(t)
+                t.start()
+                tcount += 1
+            # Wait for all threads to finish
+            for t in threads:
+                if stop_event.is_set():
+                    exit(0)
+                t.join()
+            # Set query as handled
+            # print("Setting urls as handled.")
+            # for url in urls:
+            #     set_url_as_handled(url[0])
+            print("All threads have finished.")
         display(lan)
     except KeyboardInterrupt:
         print("Stopping all threads")
