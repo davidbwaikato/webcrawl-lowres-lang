@@ -206,6 +206,7 @@ def nlp_worker(sub_urls, detect:Language, tcount):
                 continue
             if result == 0:
                 set_url_as_handled(url[0])
+                continue
             extracted_text = extract_text_from_file(result["path"], result["doc_type"])
             #extracted_text = extract_text_from_file("downloads\\test.pdf", "pdf")
             if extracted_text == None:
