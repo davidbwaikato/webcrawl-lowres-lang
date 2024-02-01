@@ -1,6 +1,6 @@
 import json
 import random
-
+from sql import insert_query_if_not_exists
 
 def load_language_dictionary(language):
     try:
@@ -9,7 +9,6 @@ def load_language_dictionary(language):
         with open(filename, "r", encoding="utf-8") as file:
             return json.load(file)
     except:
-        print(f"Dictionary for {language} not found")
         return None
 
 
@@ -67,7 +66,8 @@ def generate_all(lang, word_count=3, query_count=5):
     print("Creating queries.")
     word_dict = load_language_dictionary(lang)
     if word_dict is None:
-        exit()
+        print(f"Dictionary for {lang} not found")
+        exit(1)
     queries = []
     queries.extend(combined_word_queries(word_dict, 1, query_count))
     queries.extend(combined_word_queries(word_dict, word_count, query_count))
@@ -75,4 +75,12 @@ def generate_all(lang, word_count=3, query_count=5):
     queries.extend(common_uncommon_combinations(
         word_dict, word_count, query_count))
     queries = order_and_remove_duplicates(queries)
+    # foreach query, save it in the database
+    unique = 0
+    for query in queries:
+        # Insert the query
+        print("Inserting", query)
+        if insert_query_if_not_exists(query["query"], query["type"], lang):
+            unique += 1
+    print(f"Created {unique} unique queries")
     return queries

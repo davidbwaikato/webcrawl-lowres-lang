@@ -2,6 +2,8 @@ import requests
 from bs4 import BeautifulSoup
 from selenium.webdriver.common.by import By
 from fake_useragent import UserAgent
+from urllib.parse import urlparse, parse_qs
+import base64
 # Normal request = Will get blocked, no proxy, can't scrape dynamic pages and can't solve a captcha
 # Selenium = Won't get blocked as it simulates a real user, allows scraping dynamic pages but can't solve a captcha and is slower
 
@@ -105,8 +107,17 @@ def bing_selenium(query, driver, page=1):
             anchor = result_div.find_elements(By.CSS_SELECTOR, "a")
             link = anchor[0].get_attribute("href")
             urls.append(str(link))
-        # print(urls)
-        # exit(0)
+        # Try to decode URL if final URL is encoded
+        for url in urls:
+            if 'bing.com' in url:
+                query_params = parse_qs(urlparse(url[3]).query)
+                if 'u' in query_params:
+                    encoded_url = query_params['u'][0]
+                try:
+                    temp = "{0}{1}".format(encoded_url[2:], "==")
+                    url = base64.b64decode(temp).decode("utf-8")
+                except Exception:
+                    continue
         return urls
     except Exception as e:
         print(f"An error occurred: {e}")

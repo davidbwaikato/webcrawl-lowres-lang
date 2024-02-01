@@ -5,12 +5,25 @@ from pdfminer.high_level import extract_text
 from helpers import read_config, save_to_json
 
 
-def extract_udhr_text(pdf_path):
+def extract_text(path):
+    """Extract text from a .txt file"""
+    try:
+        with open(path, 'r', encoding='utf-8') as file:
+            return file.read()
+    except Exception as e:
+        print(f"Error reading {path}: {e}")
+        exit(1)
+
+def extract_pdf(path):
     """Extract text content from a PDF"""
-    return extract_text(pdf_path)
+    try:
+        return extract_text(path)
+    except Exception as e:
+        print(f"Error reading {path}: {e}")
+        exit(1)
 
 
-def preprocess_udhr_text(text):
+def preprocess_text(text):
     """Tokenize the content"""
     return re.findall(r'\b\w+\b', text.lower())
 
@@ -25,12 +38,19 @@ def get_common_words(tokens, min_length=3):
 
 
 def extract(reset=False):
-    """Process each PDF and save results to JSON"""
+    """Process each file and save results to JSON"""
     config = read_config()
     languages = config['languages']
     for language, item in languages.items():
-        text = extract_udhr_text(item['path'])
-        tokens = preprocess_udhr_text(text)
+        file_path = item['path']
+        if file_path.endswith('.pdf'):
+            text = extract_pdf(file_path)
+        elif file_path.endswith('.txt'):
+            text = extract_text(file_path)
+        else:
+            print(f"Error: Unsupported file type for {file_path}. Only pdf and txt files are supported.")
+            exit(1)
+        tokens = preprocess_text(text)
         common_words = get_common_words(tokens)
         filename = f"dicts/common_words_{language.lower()}.json"
         # Check if file exists and act according to `reset` parameter

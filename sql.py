@@ -2,6 +2,7 @@ import sqlite3
 import time
 from contextlib import contextmanager
 from helpers import hash_url
+from urllib.parse import urlparse
 
 dbname = "mydb.db"
 
@@ -92,25 +93,6 @@ def get_all_urls(unhandled=None):
                 "SELECT * FROM urls WHERE unhandled=?", (unhandled,))
             return cursor.fetchall()
 
-
-# def get_all_urls_nlp(unhandled=None, include_null_file_hash=False):
-#     """Retrieve all URLs from the urls table."""
-#     with get_cursor() as cursor:
-#         if unhandled is None:
-#             if include_null_file_hash:
-#                 cursor.execute("SELECT * FROM urls WHERE file_hash IS NULL")
-#             else:
-#                 cursor.execute("SELECT * FROM urls")
-#             return cursor.fetchall()
-#         else:
-#             if include_null_file_hash:
-#                 cursor.execute(
-#                     "SELECT * FROM urls WHERE unhandled=? LIMIT 100", (unhandled,))
-#             else:
-#                 cursor.execute(
-#                     "SELECT * FROM urls WHERE unhandled=? AND full_lan IS NULL LIMIT 100", (unhandled,))
-#             return cursor.fetchall()
-
         
 def query_exists(query):
     """Check if a query already exists in the queries table."""
@@ -150,7 +132,6 @@ def insert_url_if_not_exists(query_id, type, url, doc_type=""):
             return True
     return False
 
-
 def get_url_by_id(id):
     """Retrieve a URL from the urls table by its ID."""
     with get_cursor() as cursor:
@@ -172,68 +153,11 @@ def update_url_by_id(id, file_hash, doc_type, full_lan, paragraph_lan):
             WHERE id=?
         """, (file_hash, doc_type, full_lan, paragraph_lan, id))
 
-
 def update_query_unhandled_by_id(id):
     """Updates the unhandled value to false for a given query ID in the queries table."""
     with get_cursor() as cursor:
         cursor.execute(
             "UPDATE queries SET unhandled=? WHERE id=?", (False, id))
-
-
-def get_url_counts_by_query_id(lan, query_id):
-    """Returns the total number of URLs, the number of unhandled URLs, and the number of URLs with non-null full_lan for a given query ID."""
-    with get_cursor() as cursor:
-        # Total URLs count
-        cursor.execute(
-            "SELECT COUNT(*) FROM urls WHERE query_id=?", (query_id,))
-        total_count = cursor.fetchone()[0]
-        # Total unhandled URLs count
-        cursor.execute(
-            "SELECT COUNT(*) FROM urls WHERE query_id=? AND unhandled=?", (query_id, True))
-        unhandled_count = cursor.fetchone()[0]
-        # Total URLs with non-null full_lan
-        cursor.execute(
-            "SELECT COUNT(*) FROM urls WHERE query_id=? AND full_lan=?", (query_id, lan))
-        full_lan_count = cursor.fetchone()[0]
-        return {
-            "total_count": total_count,
-            "unhandled_count": unhandled_count,
-            "full_lan_count": full_lan_count
-        }
-
-
-def get_url_counts_by_type(lan, search_type):
-    """
-    Returns the total number of URLs, the number of unhandled URLs, and the number of URLs with a specific full_lan 
-    for all queries of a given language and search type.
-    """
-    if "_selenium" in search_type:
-        search_type = search_type.replace("_selenium", "")
-    with get_cursor() as cursor:
-        # Join queries and urls tables, then filter by lan and search type
-        cursor.execute("""
-            SELECT 
-                COUNT(*) as total_count,
-                SUM(CASE WHEN u.unhandled = 1 THEN 1 ELSE 0 END) as unhandled_count,
-                SUM(CASE WHEN u.full_lan = ? THEN 1 ELSE 0 END) as full_lan_count
-            FROM queries q
-            JOIN urls u on q.id = u.query_id
-            WHERE q.lan = ? AND u.type = ?
-        """, (lan, lan, search_type))
-
-        result = cursor.fetchone()
-        unhandled = 0
-        if result[1] is not None:
-            unhandled = result[1]
-        full_lan = 0
-        if result[2] is not None:
-            full_lan = result[2]
-        return {
-            "total_count": result[0],
-            "unhandled_count": unhandled,
-            "lan_count": full_lan
-        }
-
 
 def urls_exist(url_hashes, type):
     """Check if URLs with given hashes and type already exist in the database."""
@@ -244,7 +168,6 @@ def urls_exist(url_hashes, type):
                        (*url_hashes, type))
         existing_hashes = {row[0] for row in cursor.fetchall()}
     return existing_hashes
-
 
 def insert_urls_many(url_data):
     """Inserts multiple URLs at once into the database after filtering existing ones."""
@@ -311,99 +234,6 @@ def set_all_urls_unhandled():
             SET unhandled = False
         """)
 
-def count_query_types():
-    """Returns a dictionary of each query type and its count in the queries table."""
-    with get_cursor() as cursor:
-        cursor.execute("""
-            SELECT type, COUNT(*) as count
-            FROM queries
-            GROUP BY type
-        """)
-        result = cursor.fetchall()
-    # Convert the result to a dictionary
-    return {row[0]: row[1] for row in result}
-
-
-def count_urls_per_query_type():
-    """Returns a dictionary of each query type and the count of URLs associated with it."""
-    with get_cursor() as cursor:
-        cursor.execute("""
-            SELECT q.type, COUNT(u.id) as count
-            FROM queries q
-            JOIN urls u ON q.id = u.query_id
-            GROUP BY q.type
-        """)
-        result = cursor.fetchall()
-    return {row[0]: row[1] for row in result}
-
-
-def get_top_3_queries_with_most_urls():
-    """Returns the top 3 queries with the most URLs found."""
-    with get_cursor() as cursor:
-        cursor.execute("""
-            SELECT q.query, COUNT(u.id) as count
-            FROM queries q
-            JOIN urls u ON q.id = u.query_id
-            GROUP BY q.query
-            ORDER BY count DESC
-            LIMIT 3
-        """)
-        results = cursor.fetchall()
-    return [{"query": row[0], "count": row[1]} for row in results]
-
-
-def query_with_least_urls():
-    """Returns the query with the least URLs found."""
-    with get_cursor() as cursor:
-        cursor.execute("""
-            SELECT q.query, q.type, COUNT(u.id) as count
-            FROM queries q
-            LEFT JOIN urls u ON q.id = u.query_id
-            GROUP BY q.id
-            ORDER BY count ASC
-            LIMIT 1
-        """)
-        result = cursor.fetchone()
-    return {
-        "query": result[0],
-        "type": result[1],
-        "count": result[2]
-    }
-
-
-def count_queries_with_zero_urls_by_type():
-    """Returns the count of queries by type for which no URLs have been found."""
-    with get_cursor() as cursor:
-        cursor.execute("""
-            SELECT q.type, COUNT(DISTINCT q.id) 
-            FROM queries q
-            LEFT JOIN urls u ON q.id = u.query_id
-            WHERE u.id IS NULL
-            GROUP BY q.type
-        """)
-        results = cursor.fetchall()
-
-    return {row[0]: row[1] for row in results}
-
-
-# def get_most_common_urls():
-    # """Returns the last three URLs with their occurrences and unique query counts."""
-    # with get_cursor() as cursor:
-    #     cursor.execute("""
-    #         SELECT
-    #             url,
-    #             COUNT(url) as url_count,
-    #             COUNT(DISTINCT query_id) as query_count
-    #         FROM urls
-    #         GROUP BY url
-    #         ORDER BY query_count DESC, url_count DESC
-    #         LIMIT 3
-    #     """)
-    #     results = cursor.fetchall()
-
-    # # Convert results to a list of dictionaries for easier interpretation
-    # return [{"url": row[0], "url_count": row[1], "unique_queries": row[2]} for row in results]
-
 def get_most_common_urls():
     """Count the number of URLs grouped by their unique query counts."""
     with get_cursor() as cursor:
@@ -424,7 +254,6 @@ def get_most_common_urls():
         if unique_queries not in breakdown:
             breakdown[unique_queries] = 0
         breakdown[unique_queries] += 1
-
     return breakdown
 
 
@@ -434,3 +263,487 @@ def hash_exists_in_db(file_hash):
         cursor.execute("SELECT COUNT(*) FROM urls WHERE file_hash = ?", (file_hash,))
         count = cursor.fetchone()[0]
     return count > 0
+
+def set_all_queries_lan_to_maori():
+    """Sets the lan field of all queries in the database to 'MAORI'."""
+    with get_cursor() as cursor:
+        cursor.execute("""
+            UPDATE queries
+            SET lan = 'MAORI'
+        """)
+
+# Display
+def count_query_types():
+    """Returns a dictionary of each query type and its count in the queries table."""
+    with get_cursor() as cursor:
+        cursor.execute("""
+            SELECT type, COUNT(*) as count
+            FROM queries
+            GROUP BY type
+        """)
+        result = cursor.fetchall()
+    # Convert the result to a dictionary
+    return dict(result)
+
+def count_urls_per_query_type():
+    """Returns a dictionary of each query type and the count of URLs associated with it."""
+    with get_cursor() as cursor:
+        cursor.execute("""
+            SELECT q.type, COUNT(u.id) as count
+            FROM queries q
+            JOIN urls u ON q.id = u.query_id
+            GROUP BY q.type
+        """)
+        result = cursor.fetchall()
+    return dict(result)
+
+def count_handled_unhandled_queries():
+    with get_cursor() as cursor:
+        cursor.execute("""
+            SELECT unhandled, COUNT(*) as count
+            FROM queries
+            GROUP BY unhandled
+        """)
+        results = cursor.fetchall()
+        output = {"unhandled": 0, "handled": 0}
+        for result in results:
+            key = "handled" if result[0] == 0 else "unhandled"
+            output[key] = result[1]
+        return output
+
+def count_duplicate_queries():
+    with get_cursor() as cursor:
+        cursor.execute("""
+            SELECT query, COUNT(*) as count
+            FROM queries
+            GROUP BY query
+            HAVING COUNT(*) > 1
+        """)
+        result = cursor.fetchall()
+        return result
+
+def count_duplicate_url_hashes():
+    with get_cursor() as cursor:
+        # Get the total count of all duplicates (not just the number of distinct hashes that have duplicates)
+        cursor.execute("""
+            SELECT SUM(dup_count) as total_duplicates
+            FROM (
+                SELECT COUNT(*) as dup_count
+                FROM urls
+                GROUP BY url_hash
+                HAVING COUNT(*) > 1
+            ) as duplicates
+        """)
+        total_duplicates_row = cursor.fetchone()
+        total_duplicates = total_duplicates_row[0] if total_duplicates_row else 0
+
+        # Get the top 3 hashes with the most duplicates
+        cursor.execute("""
+            SELECT url_hash, COUNT(*) as count
+            FROM urls
+            GROUP BY url_hash
+            HAVING COUNT(*) > 1
+            ORDER BY count DESC
+            LIMIT 5
+        """)
+        top_hashes = cursor.fetchall()
+        
+        # Construct the result
+        result = {
+            "total_duplicate_url_hashes": total_duplicates,
+            "top_duplicate_url_hashes": [{hash_row[0]: hash_row[1]} for hash_row in top_hashes]
+        }
+        return result
+
+def count_duplicate_file_hashes():
+    with get_cursor() as cursor:
+        # Get the total count of all duplicates (ignoring NULL values)
+        cursor.execute("""
+            SELECT SUM(dup_count) as total_duplicates
+            FROM (
+                SELECT file_hash, COUNT(*) as dup_count
+                FROM urls
+                WHERE file_hash IS NOT NULL
+                GROUP BY file_hash
+                HAVING COUNT(*) > 1
+            ) as duplicates
+        """)
+        total_duplicates_row = cursor.fetchone()
+        total_duplicates = total_duplicates_row[0] if total_duplicates_row else 0
+        # Get the top 3 file hashes with the most duplicates (ignoring NULL values)
+        cursor.execute("""
+            SELECT url, COUNT(*) as count
+            FROM urls
+            WHERE file_hash IS NOT NULL
+            GROUP BY file_hash
+            HAVING COUNT(*) > 1
+            ORDER BY count DESC
+            LIMIT 5
+        """)
+        top_hashes = cursor.fetchall()
+        # Get the total count of NULL file_hash values
+        cursor.execute("""
+            SELECT COUNT(*)
+            FROM urls
+            WHERE file_hash IS NULL
+        """)
+        null_file_hash_count_row = cursor.fetchone()
+        null_file_hash_count = null_file_hash_count_row[0] if null_file_hash_count_row else 0
+        # Construct the result
+        result = {
+            "total_duplicate_file_hashes": total_duplicates,
+            "top_duplicate_file_hashes": [{hash_row[0]: hash_row[1]} for hash_row in top_hashes],
+            "total_null_file_hashes": null_file_hash_count
+        }
+        return result
+
+    
+# Count of Document Types:
+def count_doc_types_for_language_total(lan):
+    """Returns the count of each document type and the count of each type resulting in a specific language."""
+    with get_cursor() as cursor:
+        cursor.execute("""
+            SELECT doc_type, 
+                   COUNT(*) as total_count, 
+                   SUM(CASE WHEN full_lan = ? THEN 1 ELSE 0 END) as language_count
+            FROM urls
+            GROUP BY doc_type
+        """, (lan,))
+        result = cursor.fetchall()
+        return [{"doc_type": row[0], "total_count": row[1], "language_count": row[2]} for row in result]
+
+
+# Count URLs with Low Confidence for a Given Language and get top 5 lowest:
+def count_low_confidence_urls(lan, confidence_threshold=0.9):
+    with get_cursor() as cursor:
+        # Count total URLs with low confidence
+        cursor.execute("""
+            SELECT COUNT(*) as count
+            FROM urls
+            WHERE full_lan = ? AND confidence < ?
+        """, (lan, confidence_threshold))
+        total_count_row = cursor.fetchone()
+        total_count = total_count_row[0] if total_count_row else 0
+
+        # Get top 5 URLs with lowest confidence
+        cursor.execute("""
+            SELECT url, confidence
+            FROM urls
+            WHERE full_lan = ? AND confidence < ?
+            ORDER BY confidence ASC
+            LIMIT 5
+        """, (lan, confidence_threshold))
+        lowest = cursor.fetchall()
+
+        result = {
+            "total_low_confidence": total_count,
+            "top_5_lowest_confidence": lowest
+        }
+        return result
+
+# Count URLs with High Confidence for a Given Language and get top 5 highest:
+def count_high_confidence_urls(lan, confidence_threshold=0.9):
+    with get_cursor() as cursor:
+        # Count total URLs with low confidence
+        cursor.execute("""
+            SELECT COUNT(*) as count
+            FROM urls
+            WHERE full_lan = ? AND confidence >= ?
+        """, (lan, confidence_threshold))
+        total_count_row = cursor.fetchone()
+        total_count = total_count_row[0] if total_count_row else 0
+
+        # Get top 5 URLs with highest confidence
+        cursor.execute("""
+            SELECT url, confidence
+            FROM urls
+            WHERE full_lan = ? AND confidence >= ?
+            ORDER BY confidence DESC
+            LIMIT 5
+        """, (lan, confidence_threshold))
+        lowest = cursor.fetchall()
+
+        result = {
+            "total_high_confidence": total_count,
+            "top_5_highest_confidence": lowest
+        }
+        return result
+
+
+# Count URLs with Low Paragraph Percentage and Low Confidence for a Given Language and get top 5 lowest:
+def count_low_para_percent_low_confidence_urls(lan, para_threshold=90, confidence_threshold=0.9):
+    with get_cursor() as cursor:
+        # Count total URLs with low paragraph percentage and low confidence
+        cursor.execute("""
+            SELECT COUNT(*) as count
+            FROM urls
+            WHERE full_lan = ? AND paragraph_lan < ? AND confidence < ?
+        """, (lan, para_threshold, confidence_threshold))
+        total_count_row = cursor.fetchone()
+        total_count = total_count_row[0] if total_count_row else 0
+
+        # Get top 5 URLs with lowest paragraph percentage and low confidence
+        cursor.execute("""
+            SELECT url, paragraph_lan, confidence
+            FROM urls
+            WHERE full_lan = ? AND paragraph_lan < ? AND confidence < ?
+            ORDER BY paragraph_lan ASC, confidence ASC
+            LIMIT 5
+        """, (lan, para_threshold, confidence_threshold))
+        lowest = cursor.fetchall()
+
+        result = {
+            "total_low_para_percent_low_confidence": total_count,
+            "top_5_lowest_para_percent_low_confidence": lowest
+        }
+        return result
+
+# Count URLs with High Paragraph Percentage and High Confidence for a Given Language and get top 5 highest:
+def count_high_para_percent_high_confidence_urls(lan, para_threshold=90, confidence_threshold=0.9):
+    with get_cursor() as cursor:
+        # Count total URLs with high paragraph percentage and high confidence
+        cursor.execute("""
+            SELECT COUNT(*) as count
+            FROM urls
+            WHERE full_lan = ? AND paragraph_lan >= ? AND confidence >= ?
+        """, (lan, para_threshold, confidence_threshold))
+        total_count_row = cursor.fetchone()
+        total_count = total_count_row[0] if total_count_row else 0
+
+        # Get top 5 URLs with highest paragraph percentage and high confidence
+        cursor.execute("""
+            SELECT url, paragraph_lan, confidence
+            FROM urls
+            WHERE full_lan = ? AND paragraph_lan >= ? AND confidence >= ?
+            ORDER BY paragraph_lan DESC, confidence DESC
+            LIMIT 5
+        """, (lan, para_threshold, confidence_threshold))
+        highest = cursor.fetchall()
+
+        result = {
+            "total_high_para_percent_high_confidence": total_count,
+            "top_5_highest_para_percent_high_confidence": highest
+        }
+        return result
+    
+def get_url_counts_by_query_id(lan, query_id):
+    """Returns the total number of URLs, the number of unhandled URLs, and the number of URLs with non-null full_lan for a given query ID."""
+    with get_cursor() as cursor:
+        # Total URLs count
+        cursor.execute(
+            "SELECT COUNT(*) FROM urls WHERE query_id=?", (query_id,))
+        total_count = cursor.fetchone()[0]
+        # Total unhandled URLs count
+        cursor.execute(
+            "SELECT COUNT(*) FROM urls WHERE query_id=? AND unhandled=?", (query_id, True))
+        unhandled_count = cursor.fetchone()[0]
+        # Total URLs with non-null full_lan
+        cursor.execute(
+            "SELECT COUNT(*) FROM urls WHERE query_id=? AND full_lan=?", (query_id, lan))
+        full_lan_count = cursor.fetchone()[0]
+        return {
+            "total_count": total_count,
+            "unhandled_count": unhandled_count,
+            "full_lan_count": full_lan_count
+        }
+
+def get_url_counts_by_type(lan, search_type):
+    """
+    Returns the total number of URLs, the number of unhandled URLs, and the number of URLs with a specific full_lan 
+    for all queries of a given language and search type.
+    """
+    if "_selenium" in search_type:
+        search_type = search_type.replace("_selenium", "")
+    with get_cursor() as cursor:
+        # Join queries and urls tables, then filter by lan and search type
+        cursor.execute("""
+            SELECT 
+                COUNT(*) as total_count,
+                SUM(CASE WHEN u.unhandled = 1 THEN 1 ELSE 0 END) as unhandled_count,
+                SUM(CASE WHEN u.full_lan = ? THEN 1 ELSE 0 END) as full_lan_count
+            FROM queries q
+            JOIN urls u on q.id = u.query_id
+            WHERE q.lan = ? AND u.type = ?
+        """, (lan, lan, search_type))
+
+        result = cursor.fetchone()
+        unhandled = 0
+        if result[1] is not None:
+            unhandled = result[1]
+        full_lan = 0
+        if result[2] is not None:
+            full_lan = result[2]
+        return {
+            "total_count": result[0],
+            "unhandled_count": unhandled,
+            "lan_count": full_lan
+        }
+    
+# def get_top_queries_with_most_urls(lan):
+#     """Returns the top queries with the most URLs found and count of Maori URLs."""
+#     with get_cursor() as cursor:
+#         cursor.execute("""
+#             SELECT q.query, COUNT(u.id) as total_count, 
+#                    SUM(CASE WHEN u.full_lan = ? THEN 1 ELSE 0 END) as lan_count
+#             FROM queries q
+#             JOIN urls u ON q.id = u.query_id
+#             GROUP BY q.query
+#             ORDER BY total_count DESC
+#             LIMIT 5
+#         """, (lan,))
+#         results = cursor.fetchall()
+#     return [{"query": row[0], "total_url_count": row[1], "lan_url_count": row[2]} for row in results]
+
+
+def get_top_queries_with_most_urls(lan):
+    with get_cursor() as cursor:
+        cursor.execute("""
+            SELECT q.query, q.type, COUNT(u.id) as total_count, 
+                   SUM(CASE WHEN u.full_lan = ? THEN 1 ELSE 0 END) as lan_count
+            FROM queries q
+            JOIN urls u ON q.id = u.query_id
+            GROUP BY q.query
+            ORDER BY total_count DESC
+        """, (lan,))
+        results = cursor.fetchall()
+        return [{"index": idx, "query": row[0], "type": row[1], "total_url_count": row[2], "lan_url_count": row[3]} 
+                for idx, row in enumerate(results, start=1)]
+
+# def get_top_queries_with_most_urls_for_language(lan):
+#     with get_cursor() as cursor:
+#         cursor.execute("""
+#             SELECT q.query, q.type, COUNT(u.id) as total_count, 
+#                    SUM(CASE WHEN u.full_lan = ? THEN 1 ELSE 0 END) as lan_count
+#             FROM queries q
+#             JOIN urls u ON q.id = u.query_id
+#             GROUP BY q.query, q.type
+#             ORDER BY lan_count DESC, total_count DESC
+#         """, (lan,))
+#         results = cursor.fetchall()
+#         return [{"index": idx, "query": row[0], "type": row[1], "total_url_count": row[2], "lan_url_count": row[3]} 
+#                 for idx, row in enumerate(results, start=1)]
+    
+
+# def get_top_queries_with_least_urls(lan):
+#     with get_cursor() as cursor:
+#         cursor.execute("""
+#             SELECT q.query, q.type, COUNT(u.id) as total_count, 
+#                    SUM(CASE WHEN u.full_lan = ? THEN 1 ELSE 0 END) as lan_count
+#             FROM queries q
+#             LEFT JOIN urls u ON q.id = u.query_id
+#             GROUP BY q.query, q.type
+#             HAVING total_count > 0
+#             ORDER BY total_count ASC
+#         """, (lan,))
+#         results = cursor.fetchall()
+#         return [{"index": idx, "query": row[0], "type": row[1], "total_url_count": row[2], "lan_url_count": row[3]} 
+#                 for idx, row in enumerate(results, start=1)]
+
+
+def count_queries_by_type_zero_urls():
+    """Returns the count of queries by type for which no URLs have been found."""
+    with get_cursor() as cursor:
+        cursor.execute("""
+            SELECT q.type, COUNT(*) as count
+            FROM queries q
+            LEFT JOIN urls u ON q.id = u.query_id
+            WHERE u.id IS NULL
+            GROUP BY q.type
+        """)
+        result = cursor.fetchall()
+        return dict(result)
+
+def count_query_types_by_total_urls(lan):
+    """Returns the count of queries by type for a language."""
+    with get_cursor() as cursor:
+        cursor.execute("""
+            SELECT q.type,
+                   COUNT(u.id) as total_url_count,
+                   SUM(CASE WHEN u.full_lan = ? THEN 1 ELSE 0 END) as total_url_with_lan_count
+            FROM queries q
+            LEFT JOIN urls u ON q.id = u.query_id
+            GROUP BY q.type
+        """, (lan,))
+        result = cursor.fetchall()
+        return [{"type": row[0], "total_url_count": row[1], "total_url_with_lan_count": row[2]} for row in result]
+
+def get_domain_counts(lan):
+    """Returns the count of unique domains with their totals for a language."""
+    with get_cursor() as cursor:
+        cursor.execute("""
+            SELECT url, full_lan
+            FROM urls
+        """)
+        urls = cursor.fetchall()
+    domain_counts = {}
+    domain_language_counts = {}
+    for url, full_lan in urls:
+        domain = urlparse(url).netloc
+        # Count total domains
+        if domain not in domain_counts:
+            domain_counts[domain] = 0
+        domain_counts[domain] += 1
+        if full_lan == lan:
+            if domain not in domain_language_counts:
+                domain_language_counts[domain] = 0
+            domain_language_counts[domain] += 1
+    result = {
+        'total_domains': len(domain_counts),
+        'total_with_language': len(domain_language_counts),
+        'domains': domain_counts,
+        'language_domains': domain_language_counts
+    }
+    return result
+
+def count_urls_by_confidence_and_paragraph_percentage_ranges(lan):
+    confidence_ranges = [(i/10, (i+1)/10) for i in range(0, 10)]  # 0.0-0.1, 0.1-0.2, ..., 0.9-1.0
+    paragraph_ranges = [(i, i+10) for i in range(0, 100, 10)]  # 0-10%, 10-20%, ..., 90-100%
+
+    results = {'confidence': {}, 'paragraph': {}}
+
+    with get_cursor() as cursor:
+        # Count URLs in confidence ranges, excluding 1.0
+        for lower, upper in confidence_ranges:
+            upper_bound = upper if upper < 1.0 else 0.99
+            cursor.execute("""
+                SELECT COUNT(*) 
+                FROM urls
+                WHERE full_lan = ? AND confidence >= ? AND confidence < ?
+            """, (lan, lower, upper_bound))
+            count = cursor.fetchone()[0]
+            range_key = f'{lower}-{upper_bound}'
+            results['confidence'][range_key] = count
+
+        # Count URLs with exactly 1.0 confidence
+        cursor.execute("""
+            SELECT COUNT(*)
+            FROM urls
+            WHERE full_lan = ? AND confidence = 1.0
+        """, (lan,))
+        count_1 = cursor.fetchone()[0]
+        results['confidence']['1.0'] = count_1
+
+        # Count URLs in paragraph percentage ranges, excluding 100%
+        for lower, upper in paragraph_ranges:
+            upper_bound = upper if upper < 100 else 99
+            cursor.execute("""
+                SELECT COUNT(*) 
+                FROM urls
+                WHERE full_lan = ? AND paragraph_lan >= ? AND paragraph_lan < ?
+            """, (lan, lower, upper_bound))
+            count = cursor.fetchone()[0]
+            range_key = f'{lower}-{upper_bound}%'
+            results['paragraph'][range_key] = count
+
+        # Count URLs with exactly 100% paragraph percentage
+        cursor.execute("""
+            SELECT COUNT(*)
+            FROM urls
+            WHERE full_lan = ? AND paragraph_lan = 100
+        """, (lan,))
+        count_100 = cursor.fetchone()[0]
+        results['paragraph']['100%'] = count_100
+
+    return results
+
+
