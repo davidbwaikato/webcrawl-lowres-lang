@@ -18,20 +18,16 @@ source ./SETUP.bash
 
 python3 ./app.py --help
 
-# json files in dict/ already commit to git, so no need to run:
+# json files in dict/ already committed to git, so no need to run:
 #   python3 ./app.py --extract_dict
 
 # If you do, the hashmap can write out words with same frequency
 # in slightly different order, so git status will how the file
 # has changed
 
-# However, there has been a change in the filename used:
-
-cd dicts/
-mv common_words_māori.json common_words_maori.json 
-cd ..
-
-# Now you can run the generate query, search, NLP and display with:
+# So you're all set to run the subsequent stages:
+#   generate query, search, NLP and display
+# with the command:
 
   python3 ./app.py --all --search_type google
 
