@@ -3,12 +3,18 @@
 # One time only setup
 ####
 
-python3 -mvenv my-python3
-source ./my-python3/bin/activate
+  python3 -mvenv my-python3
+  source ./my-python3/bin/activate
 
-python3 -m pip3 install --upgrade pip
+  python3 -m pip3 install --upgrade pip
 
-pip3 install -r requirements-toplevel.txt
+  pip3 install -r requirements-toplevel.txt
+
+  /bin/cp config.json.in config.json
+  # And then open in an editor, and adjust as needed
+  # such as added in keys to use web searching APIs
+
+  emacs config.json
 
 ####
 # Ready to run the code
