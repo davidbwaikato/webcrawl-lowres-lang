@@ -1,0 +1,10 @@
+bs4==0.0.2
+lingua-language-detector==2.0.2
+nltk==3.8.1
+pdfminer.six==20231228
+PyPDF2==3.0.1
+python-docx==1.1.0
+requests==2.31.0
+selenium==4.17.2
+spacy==3.7.2
+webdriver-manager==4.0.1

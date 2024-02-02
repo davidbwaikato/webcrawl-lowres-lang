@@ -26,6 +26,10 @@ from urllib.parse import urlparse
 from urllib.robotparser import RobotFileParser
 import sql
 import const
+
+import ssl
+ssl._create_default_https_context = ssl._create_unverified_context
+
 # py app.py -nlp -nt 20
 
 
@@ -103,6 +107,7 @@ def download_and_save(url_id, url, save_dir='downloads', timeout=10):
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
         # Fetch the content with a timeout and allow redirects
+        print(f"Away to get URL {url}")
         response = requests.get(url, verify=False, timeout=timeout, allow_redirects=True)
         if response.status_code != 200:
             return 0
@@ -137,7 +142,7 @@ def download_and_save(url_id, url, save_dir='downloads', timeout=10):
         print("Request timed out: ", url)
         return 0
     except Exception as e:
-        print(f"Error getting file: {e}")
+        print(f"Error getting file for {url}: {e}")        
         return 0
     
 def search_and_fetch(query, type, page=1, **kwargs):
@@ -537,6 +542,7 @@ if __name__ == "__main__":
         if args.nlp or args.all:
             # Get all relevant queries from the database
             urls = sql.get_all_urls(handled)
+            print(f"Number of urls to be processed by NLP: {len(urls)}")
             # Split queries into sub-lists for each thread
             split_urls = [urls[i::num_threads]
                              for i in range(num_threads)]

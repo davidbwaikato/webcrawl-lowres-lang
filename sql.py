@@ -48,6 +48,7 @@ def create(reset=False):
             unhandled BOOLEAN DEFAULT 1,
             full_lan TEXT,
             paragraph_lan INTEGER DEFAULT 0,
+            confidence INTEGER,
             FOREIGN KEY (query_id) REFERENCES queries(id)
         )
         ''')

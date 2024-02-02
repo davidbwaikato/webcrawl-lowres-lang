@@ -1,7 +1,7 @@
 import re
 import os
 from collections import Counter
-from pdfminer.high_level import extract_text
+from pdfminer.high_level import extract_text as pdfminer_extract_text
 from helpers import read_config, save_to_json
 
 
@@ -17,7 +17,7 @@ def extract_text(path):
 def extract_pdf(path):
     """Extract text content from a PDF"""
     try:
-        return extract_text(path)
+        return pdfminer_extract_text(path)
     except Exception as e:
         print(f"Error reading {path}: {e}")
         exit(1)
