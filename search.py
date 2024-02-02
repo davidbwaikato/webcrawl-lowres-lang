@@ -50,7 +50,7 @@ def google_selenium(query, driver, page=1):
 
 def google_api(query, api_key, cx, page, **kwargs):
     """Fetch results from Google using the API"""
-    print("Running Google API for {query}, page {page}")
+    print(f"Running Google API for {query}, page {page}")
     start = (page - 1) * 10
     base_url = "https://www.googleapis.com/customsearch/v1"
     params = {
@@ -75,7 +75,7 @@ def google_api(query, api_key, cx, page, **kwargs):
 
 def bing(query,  page=1):
     """Fetch results from Bing"""
-    print("Running Bing Search for {query}, page {page}")
+    print(f"Running Bing Search for {query}, page {page}")
     start = (page - 1) * 10
     url = f"https://www.bing.com/search?q={query}&first={start}"
     ua = UserAgent()
@@ -97,7 +97,7 @@ def bing(query,  page=1):
 def bing_selenium(query, driver, page=1):
     """Fetch results from Bing using selenium"""
     # https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/116.0.5845.96/win64/chromedriver-win64.zip
-    print("Running Bing Selenium for {query}, page {page}")    
+    print(f"Running Bing Selenium for {query}, page {page}")    
     start = (page - 1) * 10
     url = f"https://www.bing.com/search?q={query}&first={start}"
     try:
