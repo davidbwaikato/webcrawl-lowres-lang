@@ -6,13 +6,15 @@
 python3 -mvenv my-python3
 source ./my-python3/bin/activate
 
-python3 -m pip install --upgrade pip
+python3 -m pip3 install --upgrade pip
 
-pip install -r requirements-toplevel.txt
+pip3 install -r requirements-toplevel.txt
 
 ####
 # Ready to run the code
 ####
+
+source ./SETUP.bash
 
 python3 ./app.py --help
 
