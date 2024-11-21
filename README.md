@@ -83,7 +83,7 @@ is included.  This can be inspected with the following commands:
 ```
   echo -e '.headers on \n select * from queries;' | sqlite3 querydownload-sulhan.db  | less
   echo -e '.headers on \n select * from urls;' | sqlite3 querydownload-sulhan.db  | less
-111    
+```    
 
 # Running the code
 
