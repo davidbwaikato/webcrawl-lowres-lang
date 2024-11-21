@@ -1,3 +1,4 @@
+fake_useragent=-1.5.1
 bs4==0.0.2
 lingua-language-detector==2.0.2
 nltk==3.8.1
@@ -8,3 +9,4 @@ requests==2.31.0
 selenium==4.17.2
 spacy==3.7.2
 webdriver-manager==4.0.1
+
