@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import os
 import time
 import random
@@ -157,8 +159,11 @@ def search_and_fetch(query, type, page=1, **kwargs):
         ua = UserAgent()
         user_agent = ua.random
         options.add_argument(f'--user-agent={user_agent}')
-        driver = webdriver.Chrome(
-            chrome_options=options, executable_path=config['chromedriver'])
+        #driver = webdriver.Chrome(
+        #    chrome_options=options, executable_path=config['chromedriver'])
+        #driver = webdriver.Firefox(
+        #    gecko_options=options, executable_path=config['geckodriver'])
+        driver = webdriver.Firefox()
     if type == const.GOOGLE_SELENIUM:
         engine = const.GOOGLE
     elif type == const.BING_SELENIUM:
