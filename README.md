@@ -111,16 +111,25 @@ JSON files, you're all set to run all of the the remained stages:
 For a minimal example that will take only a few minutes to run:
 
 ```
-  ./lrl-crawler.py --lan MAORI --query_count 1 --search_type google --threads 1 --pages 1 --all
+  ./lrl-crawler.py --lang MAORI --query_count 1 --search_type google --threads 1 --pages 1 --all
 ```
 
 This generates the queries, performs the search, runs NLP over the downloaded
 results and then displays some summary information.
 
+
+```
+1|pūtaiao|single|MAORI|0
+2|ako whakarato whakawhiwhi|combined|MAORI|0
+3|infoline ipurangi pae|phrase|MAORI|0
+4|kāinga maru rātau|common_uncommon|MAORI|0
+```
+
+
 And to test out your ability to work with Selenium to control your browser:
 
 ```
-  ./lrl-crawler.py --lan MAORI --query_count 1 --search_type google_selenium --threads 1 --pages 1 --all
+  ./lrl-crawler.py --lang MAORI --query_count 1 --search_type google_selenium --threads 1 --pages 1 --all
 ```
 
 Operating more on default, designed to be more comprehensive web crawl:

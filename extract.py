@@ -1,5 +1,8 @@
-import re
+import json
 import os
+import re
+import sys
+
 from collections import Counter
 from pdfminer.high_level import extract_text as pdfminer_extract_text
 from helpers import read_config, save_to_json
@@ -37,7 +40,7 @@ def get_common_words(tokens, min_length=3):
     return word_freq.most_common()
 
 
-def extract(reset=False):
+def extractDEPRECATED(reset=False):
     """Process each file and save results to JSON"""
     config = read_config()
     languages = config['languages']
@@ -56,3 +59,43 @@ def extract(reset=False):
         # Check if file exists and act according to `reset` parameter
         if not os.path.exists(filename) or reset:
             save_to_json(dict(common_words), filename)
+        else:
+            print(f"{filename} already exists.  As function argument 'reset'={reset}, not overwriting file")
+
+
+def extractNew(lang,force=False,verbose=False):
+    """Process each file and save results to JSON"""
+
+    config = read_config()
+    languages = config['languages']
+
+    for language, item in languages.items():
+        # print(f"args.lang={lang}, language = {language}")
+        
+        if (lang != "All") and (lang != language):
+            continue
+
+        print(f"Processing langauge: {language}")
+        
+        file_path = item['path']
+        if file_path.endswith('.pdf'):
+            text = extract_pdf(file_path)
+        elif file_path.endswith('.txt'):
+            text = extract_text(file_path)
+        else:
+            print(f"Error: Unsupported file type for {file_path}. Only pdf and txt files are supported.",file=sys.stderr)
+            exit(1)
+
+        tokens = preprocess_text(text)
+        common_words = get_common_words(tokens)
+        filename = f"dicts/common_words_{language.lower()}.json"
+
+        if (verbose):
+            print(json.dump(dict(common_words), fp=sys.stdout, ensure_ascii=False, indent=4))
+            
+        # Check if file exists and act according to `force` parameter
+        if not os.path.exists(filename) or force:
+            save_to_json(dict(common_words), filename)
+        else:
+            print(f"  As function argument 'force'={force}, not overwriting existig: {filename}")
+            
