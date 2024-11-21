@@ -1,46 +1,64 @@
 
 # One time only setup
 
-```
+If needing to install a version of python3 without admin rights,
+run ./ get-selfcontained-python3.sh and follow the instructions there.
+If following this option, then there is no need to set up a virtual
+python env.
 
+Otherwise:
+
+```
   python3 -mvenv python3-for-lrl
   source ./python3-for-lrl/bin/activate
+```
 
+Optionally bring your pip3 is up-to-date, and install the
+supporting python packages:
+
+```
   pip3 install --upgrade pip
 
   pip3 install -r requirements-toplevel.txt
+```
 
+Now setup (and edit accordingly) _config.json_:
+```
   /bin/cp config.json.in config.json
-  #
-  # And then open in an editor, and adjust as needed
-  # such as adding in keys to use web searching APIs
-
   emacs config.json
 ```
 
-If looking to work with Firefox on Linux:
+If you are going to be using the official Google or Bing API calls,
+then you will need to add the relevant key(s) here.
+
+## Working with Selenium
+
+If looking to use Selenium to download weg page URLs then you will
+need to install a driver such as geckodriver or chromedrive.
+This in turn needs to be matched to the version of the web browser
+you have installed (respectively) _firefox_ and _chrome_ in
+the case of the two example drivers mentioned.
+
+For example, for to work with Firefox on Linux:
 
 1. Get a self-contained firefox (tarball)
 
   https://www.mozilla.org/en-GB/firefox/new/
-
+```
     wget -O firefox-latest-ssl_linux64.tar.bz2 \
       "https://download.mozilla.org/?product=firefox-latest-ssl&os=linux64&lang=en-GB"
-    
+```
+
 2. Get a version of geckodriver that is matched to you version of Firefox
 
 
   https://github.com/mozilla/geckodriver/releases/download/v0.35.0/
- 
+``` 
     wget https://github.com/mozilla/geckodriver/releases/download/v0.35.0/geckodriver-v0.35.0-linux64.tar.gz
+```
 
+# Running the code
 
-Note:
-
-Consider streamlining with
-  https://pypi.org/project/get-gecko-driver/
-
-# Ready to run the code
 
 ```
     source ./SETUP.bash
@@ -98,3 +116,10 @@ The following were skipped, as Sulhan said they were'nt used:
 langdetect==1.0.7
 spacy-langdetect==0.1.2
 langid==1.1.6
+
+
+# Additional Note(s):
+
+Consider streamlining working with Gecko/Selenium/Firefox with:
+
+  https://pypi.org/project/get-gecko-driver/
