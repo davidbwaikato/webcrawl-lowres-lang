@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from helpers import hash_url
 from urllib.parse import urlparse
 
-dbname = "mydb.db"
+dbname = "querydownload.db"
 
 
 @contextmanager

@@ -63,10 +63,10 @@ For example, for to work with Firefox on Linux:
 ```
     source ./SETUP.bash
 
-    python3 ./app.py --help
+    python3 ./lrl-crawler.py --help
 
     # json files in dict/ already committed to git, so no need to run:
-    #   python3 ./app.py --extract_dict
+    #   python3 ./lrl-crawler.py --extract_dict
 
     # If you do, the hashmap can write out words with same frequency
     # in slightly different order, so git status will how the file
@@ -76,7 +76,7 @@ For example, for to work with Firefox on Linux:
     #   generate query, search, NLP and display
     # with the command:
 
-  python3 ./app.py --all --search_type google
+  python3 ./lrl-crawler.py --all --search_type google
 ```
 
 
