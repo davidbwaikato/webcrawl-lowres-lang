@@ -81,39 +81,60 @@ A version of the database produced during the original ENGEN582 project
 is included.  This can be inspected with the following commands:
 
 ```
-    echo -e '.headers on \n select * from queries;' | sqlite3 querydownload-sulhan.db  | less
-    echo -e '.headers on \n select * from urls;' | sqlite3 querydownload-sulhan.db  | less
+  echo -e '.headers on \n select * from queries;' | sqlite3 querydownload-sulhan.db  | less
+  echo -e '.headers on \n select * from urls;' | sqlite3 querydownload-sulhan.db  | less
 111    
 
 # Running the code
 
+To get command-line usage:
 
 ```
-    source ./SETUP.bash
+  source ./SETUP.bash
 
-    python3 ./lrl-crawler.py --help
+  python3 ./lrl-crawler.py --help
+```
 
-    # json files in dict/ already committed to git, so no need to run:
-    #   python3 ./lrl-crawler.py --extract_dict
+```
+  # json files in dict/ already committed to git, so no need to run:
+  #   python3 ./lrl-crawler.py --extract_dict
 
-    # If you do, the hashmap can write out words with same frequency
-    # in slightly different order, so git status will how the file
-    # has changed
+  # If you do, the hashmap can write out words with same frequency
+  # in slightly different order, so git status will how the file
+  # has changed
+```
 
-    # So you're all set to run the subsequent stages:
-    #   generate query, search, NLP and display
-    # with the command:
 
+So for one of the provided low-resource language 'dictionary' (frequency count)
+JSON files, you're all set to run all of the the remained stages:
+
+For a minimal example that will take only a few minutes to run:
+
+```
+  ./lrl-crawler.py --lan MAORI --query_count 1 --search_type google --threads 1 --pages 1 --all
+```
+
+This generates the queries, performs the search, runs NLP over the downloaded
+results and then displays some summary information.
+
+And to test out your ability to work with Selenium to control your browser:
+
+```
+  ./lrl-crawler.py --lan MAORI --query_count 1 --search_type google_selenium --threads 1 --pages 1 --all
+```
+
+Operating more on default, designed to be more comprehensive web crawl:
+
+```
   python3 ./lrl-crawler.py --all --search_type google
 ```
 
 
 ====
-####
 # Extra notes on what gets installed
-####
+====
 
-# Some things that are typically already installed
+## Some things that are typically already installed
 pip3 install wheel
 pip3 install requests
 
