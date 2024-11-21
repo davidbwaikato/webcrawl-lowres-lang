@@ -57,6 +57,34 @@ For example, for to work with Firefox on Linux:
     wget https://github.com/mozilla/geckodriver/releases/download/v0.35.0/geckodriver-v0.35.0-linux64.tar.gz
 ```
 
+# Understanding the role of the sqlite3 database
+
+A database is used to store the generated Low-Resource Language (LRL)
+queries.  It is also used to store the URL information of the
+pages, identified by the LRL queries.
+
+The table name of LRL queries is _queries_ and the table name for the
+identified web pages to download, _urls_.  In the case of the latter
+a variety of information is held, in addition to the basic URL:
+
+  * A marker to indicate whether or not the URL has been successfull download
+  * A hash of the URL
+  * A hash of the downloaded content
+  * The document type (currently HTML of PDF)
+  * The identified lanuage of the page, as determined by NLP analysis
+
+Various metrics produced by the NLP tool are held:
+full-page identified language; majority paragraph-by-paragraph language
+identification; and confidence rating.
+
+A version of the database produced during the original ENGEN582 project
+is included.  This can be inspected with the following commands:
+
+```
+    echo -e '.headers on \n select * from queries;' | sqlite3 querydownload-sulhan.db  | less
+    echo -e '.headers on \n select * from urls;' | sqlite3 querydownload-sulhan.db  | less
+111    
+
 # Running the code
 
 
