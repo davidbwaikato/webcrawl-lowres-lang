@@ -9,14 +9,13 @@ import argparse
 import requests
 import threading
 
-#from extract import extractOrig
 from queries import generate_all
 from helpers import hash_url, read_config, remove_blacklisted
 from search import google, google_selenium, google_api, bing, bing_selenium
 
 from fake_useragent import UserAgent
 from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
+
 
 from nlp import extract_text_from_file, run_nlp_algorithms, clean_text
 from lingua import Language
@@ -102,32 +101,74 @@ def set_values_from_existing(url_id, file_hash):
     sql.update_url(url_id, file_hash, existing[6], existing[8], existing[10], existing[9])
     return 1
 
-def download_and_save(url_id, url, save_dir='downloads', timeout=10):
+def init_driver():
+    #from selenium.webdriver.chrome.options import Options
+    from selenium.webdriver.firefox.options import Options
+    
+    options = Options()
+    
+    ua = UserAgent()
+    user_agent = ua.random
+    options.add_argument(f'--user-agent={user_agent}')
+
+    options.add_argument("--headless")
+    #options.setHeadless()
+
+    #driver = webdriver.Chrome(
+    #    chrome_options=options, executable_path=config['chromedriver'])
+    #driver = webdriver.Firefox(
+    #    gecko_options=options, executable_path=config['geckodriver'])
+    driver = webdriver.Firefox(options=options)
+
+    return driver
+
+def download_and_save(url_id, url, type, save_dir='downloads', timeout=10):
+
     try:
         # Extract root domain from URL
-        print(f"download_and_safe(), url_id={url_id}, url={url}")
+        #print(f"download_and_save(), url_id={url_id}, url={url}")
+        print(f"download_and_save(), url_id={url_id}")
+        print(f"url={url}")
+        
         parsed_url = urlparse(url)
         root_domain = f"{parsed_url.scheme}://{parsed_url.netloc}"
+
         # Check robots.txt for the site
+
+        # **** XXXX Have looked at some examples where RobotFileParser()
+        # **** XXXX has rejected the URL, however a manual check of 'robots.txt'
+        # **** XXXX looks to be fine for downloading the given URL
+        # =>
+        # **** XXXX As all URLs we access have been found by a web search, this means the
+        # **** XXXX search engine has crawled this site, so consider having config.json
+        # **** XXXX option to skip the robots.txt check
+        
         rp = RobotFileParser()
-        rp.set_url(os.path.join(root_domain, 'robots.txt'))
+        # The following original line would do the wrong thing on Windows
+        # rp.set_url(os.path.join(root_domain, 'robots.txt'))
+        rp.set_url(root_domain+'/robots.txt')
         rp.read()
+
         # Return if not allowed to crawl this URL
         if not rp.can_fetch("*", url):
             print(f"Crawling forbidden by robots.txt for URL: {url}")
             return 0
+
         # Ensure the save directory exists
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
+
         # Fetch the content with a timeout and allow redirects
-        print(f"Away to get URL {url}")
+        #print(f"Away to get URL {url}")
+
+        driver = None
+        
         response = requests.get(url, verify=False, timeout=timeout, allow_redirects=True)
         if response.status_code != 200:
             return 0
-        # Hash the content
-        sha256_hash = hashlib.sha256()
-        sha256_hash.update(response.content)
-        file_hash = sha256_hash.hexdigest()
+        
+        response_content = None
+
         # Identify the content type
         content_type = response.headers.get('content-type')
         if "html" in content_type:
@@ -139,8 +180,35 @@ def download_and_save(url_id, url, save_dir='downloads', timeout=10):
         else:
             print("Unknown content type: ", content_type)
             return 0
+
+        if doc_type == "html" and (type == const.GOOGLE_SELENIUM or type == const.BING_SELENIUM):
+            driver = init_driver()
+            driver.get(url)
+
+            # Working on the assumption that driver.get() only returns
+            # when page is loaded into browser
+
+            # If this turns out not to be the case, then ...
+            # Consider putting in some form of wait, either time.sleep(5) or
+            #    https://stackoverflow.com/questions/5868439/wait-for-page-load-in-selenium
+
+            # StackOverflow articles discuss that driver returns content in UTF8            
+            # where it can, however (emperically) it is still a binary string
+            # at this point and needs to be encoded for hashlib.sha256() to work
+            response_content = driver.page_source.encode("utf-8")
+            # print(f"Selenium encoded: {response_content[:300]}")
+            driver.quit();
+        else:
+            response_content = response.content
+            
+        # Hash the content
+        sha256_hash = hashlib.sha256()
+        sha256_hash.update(response_content)
+        file_hash = sha256_hash.hexdigest()
+
         filename = file_hash + "." + doc_type
         filepath = os.path.join(save_dir, filename)
+
         # Save the content if the hash does not exist in the database
         if os.path.exists(filepath):
             # Try to search and assign database value first
@@ -148,9 +216,16 @@ def download_and_save(url_id, url, save_dir='downloads', timeout=10):
                 return 1
             print(f"File with hash {file_hash} already exists in downloads.")
             return {"path": filepath, "hash": file_hash, "doc_type": doc_type}
+
+        #print("----")
+        #print(f"filepath = {filepath}")
+        #print(response_content[:100])
+        
         with open(filepath, 'wb') as f:
-            f.write(response.content)
+            f.write(response_content)
+            
         return {"path": filepath, "hash": file_hash, "doc_type": doc_type}
+
     except requests.exceptions.Timeout:
         print("Request timed out: ", url)
         return 0
@@ -164,17 +239,19 @@ def search_and_fetch(query, type, page=1, **kwargs):
     text = query[1]
     driver = None
     config = read_config()
+
     # Get where to save the data
     if type == const.GOOGLE_SELENIUM or type == const.BING_SELENIUM:
-        options = Options()
-        ua = UserAgent()
-        user_agent = ua.random
-        options.add_argument(f'--user-agent={user_agent}')
-        #driver = webdriver.Chrome(
-        #    chrome_options=options, executable_path=config['chromedriver'])
-        #driver = webdriver.Firefox(
-        #    gecko_options=options, executable_path=config['geckodriver'])
-        driver = webdriver.Firefox()
+        driver = init_driver()        
+        #options = Options()
+        #ua = UserAgent()
+        #user_agent = ua.random
+        #options.add_argument(f'--user-agent={user_agent}')
+        ##driver = webdriver.Chrome(
+        ##    chrome_options=options, executable_path=config['chromedriver'])
+        ##driver = webdriver.Firefox(
+        ##    gecko_options=options, executable_path=config['geckodriver'])
+        #driver = webdriver.Firefox()
     if type == const.GOOGLE_SELENIUM:
         engine = const.GOOGLE
     elif type == const.BING_SELENIUM:
@@ -203,6 +280,7 @@ def search_and_fetch(query, type, page=1, **kwargs):
             break
         urls.extend(temp)
         count += 1
+
     # Quit the driver after the loop ends
     if driver:
         driver.quit()
@@ -224,50 +302,60 @@ def search_worker(sub_queries, search_type, pages):
         search_and_fetch(query, search_type, pages)
         time.sleep(5)
 
-def nlp_worker(sub_urls, detect:Language, tcount):
+def nlp_worker(sub_urls, search_type, detect:Language, tcount):
     for url in sub_urls:
         if url[7] == 0:
             #print("{0}".format(url))
             #print("{0} {1}".format(url[0], url[7]))
             continue
         now = datetime.datetime.now()
-        print(f"{tcount} ============ {now.time()} ============ {url[0]}")
+        print(f"Thread {tcount} ============ NLP Stage {now.time()} ============ URL id {url[0]}")
         try:
             # Check if the stop event is set
             if stop_event.is_set():
                 return
-            result = download_and_save(url[0], url[3])
+            result = download_and_save(url[0], url[3], search_type)
             if result == 1:
-                print(f"{tcount} ============ ============ EXISTING {url[0]}")
+                print(f"Thread {tcount} ============ ============ EXISTING URL id {url[0]}")
                 continue
             if result == 0:
                 sql.set_url_as_handled(url[0])
                 continue
+
             extracted_text = extract_text_from_file(result["path"], result["doc_type"])
-            #extracted_text = extract_text_from_file("downloads\\test.pdf", "pdf")
             if extracted_text == None:
                 sql.set_url_as_handled(url[0])
+                print(f"Thread {tcount} xxxxxxxxxxxx deleting (no extracted text) xxxxxxxxxxxx")
+                delete_file(result["path"])                
                 continue
             cleaned_extracted_text = clean_text(extracted_text)
             # Guard against the cleaned text now being nothing but 100% whitespace
             if cleaned_extracted_text.isspace():
                 sql.set_url_as_handled(url[0])
+                print(f"Thread {tcount} xxxxxxxxxxxx deleting (text all whitespace) xxxxxxxxxxxx")
+                delete_file(result["path"])                                
                 continue            
-            langs = run_nlp_algorithms(cleaned_extracted_text, Language.MAORI.name)
+
+            langs = run_nlp_algorithms(cleaned_extracted_text, Language.MAORI.name) # **** XXXX
             if langs["lingua"]["lang"] == None:
                 sql.set_url_as_handled(url[0])
+                print(f"Thread {tcount} xxxxxxxxxxxx deleting (NLP failed to detect language) xxxxxxxxxxxx")
+                delete_file(result["path"])                                
                 continue
             if langs["lingua"]["lang"] != detect.name:
+                print(f"Thread {tcount} xxxxxxxxxxxx deleting (detected {langs['lingua']['lang'].capitalize()} != {detect.name.capitalize()}) xxxxxxxxxxxx")
                 delete_file(result["path"])
+                
             sql.update_url(url[0], result["hash"], result["doc_type"], langs["lingua"]["lang"], langs["lingua"]["condifence"], langs["lingua"]["percentage"])
             # print("{0} {1} {2} HANDLED".format(tcount, url[0], now.time()))
+
         except FileNotFoundError as e:
             # print("{0} {1} {2} HANDLED".format(tcount, url[0], now.time()))
             sql.set_url_as_handled(url[0])
-            print(f"{tcount} File not found")
+            print(f"Thread {tcount} File not found")
         except Exception as e:
             sql.set_url_as_handled(url[0])
-            print(f"{tcount} Error in NLP: {e}")
+            print(f"Thread {tcount} Error in NLP: {e}")
         
 def validate_args(args):
     try:
@@ -561,7 +649,7 @@ if __name__ == "__main__":
             print("Setting queries as handled.")
             for query in queries:
                 sql.set_query_as_handled(query[0])
-            print("All threads have finished.")
+            print("All Search-threads have finished.")
         # NLP
         if args.nlp or args.all:
             # Get all relevant queries from the database
@@ -576,7 +664,7 @@ if __name__ == "__main__":
             tcount = 1
             for sub_urls in split_urls:
                 t = threading.Thread(target=nlp_worker, args=(
-                    sub_urls, Language.MAORI, tcount))
+                    sub_urls, search_type, Language.MAORI, tcount))
                 threads.append(t)
                 t.start()
                 tcount += 1
@@ -589,7 +677,7 @@ if __name__ == "__main__":
             # print("Setting urls as handled.")
             # for url in urls:
             #     set_url_as_handled(url[0])
-            print("All threads have finished.")
+            print("All Download+NLP-threads have finished.")
         display(lang)
     except KeyboardInterrupt:
         print("Stopping all threads")

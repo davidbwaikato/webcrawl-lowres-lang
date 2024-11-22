@@ -10,7 +10,7 @@ import base64
 
 def google(query,  page=1):
     """Fetch results from Google"""
-    print(f"Running Google Search for {query}, page {page}")    
+    print(f"Running Google Search for {query}, page {page}")
     start = (page - 1) * 10
     url = f"https://www.google.com/search?q={query}&start={start}"
     ua = UserAgent()
@@ -32,6 +32,8 @@ def google(query,  page=1):
 def google_selenium(query, driver, page=1):
     """Fetch results from Google using selenium"""
     # https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/116.0.5845.96/win64/chromedriver-win64.zip
+
+    print(f"Running Google Selenium Search for {query}, page {page}")    
     start = (page - 1) * 10
     url = f"https://www.google.com/search?q={query}&start={start}"
     try:
