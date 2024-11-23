@@ -10,6 +10,14 @@ import base64
 
 def google(query,  page=1):
     """Fetch results from Google"""
+
+    # **** XXXX testing sequence that caused issue !!!
+    #
+    #query="whakamahi" # single
+    #query="ratonga roherohenga whakatikatika" #  combined
+    #query="'aroaro haumarutia mōhiotia'" #  phrase 
+    #query="pūtaketanga tika tuakana" # common uncommon
+
     print(f"Running Google Search for {query}, page {page}")
     start = (page - 1) * 10
     url = f"https://www.google.com/search?q={query}&start={start}"
@@ -19,13 +27,27 @@ def google(query,  page=1):
     response = requests.get(url, headers=header)
     if response.status_code != 200:
         return []
+
     soup = BeautifulSoup(response.text, 'html.parser')
+    result_items = soup.find_all('div',  {'class': 'g'})
+    num_result_items = len(result_items)
+    if (num_result_items > 0):
+        print(f"  Extracting document links from {num_result_items} returned matching items")
+    else:
+        print(f"  No matching documents returned")
+
     urls = []
-    for g in soup.find_all('div',  {'class': 'g'}):
+    for g in result_items:
         anchors = g.find_all('a')
         if anchors:
-            link = anchors[0]['href']
-            urls.append(str(link))
+            # It was found that, occassionaly, the link in the returned results
+            # didn't have a 'href' (e.g., just an anchor-name link(
+            if anchors[0].has_attr("href"):
+                link = anchors[0]['href']
+                urls.append(str(link))
+            else:
+                print(f"  Skipping extracted anchor, as it had no 'href' link")
+                
     return urls
 
 

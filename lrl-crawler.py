@@ -9,13 +9,8 @@ import argparse
 import requests
 import threading
 
-from queries import generate_all
-from helpers import hash_url, read_config, remove_blacklisted
-from search import google, google_selenium, google_api, bing, bing_selenium
-
 from fake_useragent import UserAgent
 from selenium import webdriver
-
 
 from nlp import extract_text_from_file, run_nlp_algorithms, clean_text
 from lingua import Language
@@ -30,54 +25,63 @@ from urllib.parse import urlparse
 from urllib.robotparser import RobotFileParser
 
 import sql
-import const
 
+# Import 'ssl' and disable default certificate verification for https URLs
 import ssl
 ssl._create_default_https_context = ssl._create_unverified_context
 
+
+import const
+from queries import generate_all
+from helpers import hash_url, read_config, remove_blacklisted
+from search import google, google_selenium, google_api, bing, bing_selenium
+
+
 stop_event = threading.Event()
 
-# py app.py -nlp -nt 20
-
-
-# def get_all_query_files(directory="queries"):
-#     """Returns a list of all files in a directory"""
-#     return [os.path.join(directory, file) for file in os.listdir(directory) if os.path.isfile(os.path.join(directory, file))]
-
-
-# Accent Fold ****
-
-# https://stackoverflow.com/questions/517923/what-is-the-best-way-to-remove-accents-normalize-in-a-python-unicode-string
+# If needing to accent-fold a string, see
+#   https://stackoverflow.com/questions/517923/what-is-the-best-way-to-remove-accents-normalize-in-a-python-unicode-string
 
 def get_args():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description="Arguments that can be used")
     parser.add_argument("-l", "--lang", default=Language.MAORI.name,
                         help=f"language used for generating queries [Default={Language.MAORI.name}]")
-    parser.add_argument("-w", "--word_count", type=int,
+    parser.add_argument("-wc", "--word_count", type=int,
                         default=3, help=f"how many words are used in a 'combined', 'phrase', and 'common_uncommon' generated query [Default=3]")
-    parser.add_argument("-q", "--query_count", type=int,
+    parser.add_argument("-qc", "--query_count", type=int,
                         default=5, help=f"how many queries of each type (single, combine, phrase, common_uncommon) are generated [Default=5]")
-    parser.add_argument("-st", "--search_type",
-                        default=const.BING_SELENIUM, help=f"Search type [Default={const.BING_SELENIUM}]")
-    parser.add_argument("-nt", "--threads", type=int,
+    parser.add_argument("-se", "--search_engine",
+                        default=const.GOOGLE_SELENIUM, help=f"search engine used [Default={const.GOOGLE}]")
+    parser.add_argument("-dws", "--download_with_selenium", action="store_true",
+                        default=False, help=f"use Selenium-controlled web browser for page downloads [Default=False]")
+    parser.add_argument("-irt", "--ignore_robots_txt", action="store_true",
+                        default=False, help=f"as the pages 'lrl-crawler.py' detects have been located via a web search engine, the site has already been crawled, giving reasonable grounds for skipping the scripts built-in robots.txt [Default=False]")
+
+    parser.add_argument("-nt", "--num_threads", type=int,
                         default=5, help=f"the number of threads that are used to run the querying and NLP processsing stages [Default=5]")
-    parser.add_argument("-p", "--pages", type=int, default=5,
-                        help=f"Number of pages to search [Default=5]")
-#    parser.add_argument("-e", "--extract_dictionary",
-#                        action="store_true", help="Flag to create the frequency count 'dictionary' (in /dict) for each United Nations Declaration of Human Rights documents in the /unhdr subdirectory")
+
+# The following is not currently supported
+#    parser.add_argument("-sp", "--start_page", type=int, default=0,
+#                        help=f"effectively, how many search result pages to skip over before processing results [Default=0]")
+    parser.add_argument("-np", "--num_pages", type=int, default=5,
+                        help=f"number of pages of search results to process (x 4, for each query type) [Default=5]")
+
     parser.add_argument("-uh", "--handled", action="store_true",
                         default=True, help="Flag to get use handled queries or urls")
-    parser.add_argument("-a", "--all", action="store_true",
+
+    parser.add_argument("-a",  "--all", action="store_true",
                         default=False, help="Flag to create queries, search and run NLP")
-    parser.add_argument("-cq", "--create_queries", action="store_true",
+    parser.add_argument("-oq", "--only_queries", action="store_true",
                         default=False, help="Flag to only create queries")
-    parser.add_argument("-s", "--search", action="store_true",
+    parser.add_argument("-os", "--only_search", action="store_true",
                         default=False, help="Flag to only search queries")
-    parser.add_argument("-nlp", "--nlp", action="store_true",
+    parser.add_argument("-on", "--only_nlp", action="store_true",
                         default=False, help="Flag to only run NLP on URLs")
-    parser.add_argument("-d", "--display", action="store_true",
+
+    parser.add_argument("-d",  "--display_stats", action="store_true",
                         default=False, help="Flag to show details")
+
     parser.add_argument("-sau", "--set_queries_unhandled", action="store_true",
                         default=False, help="Flag to set all queries as unhandled")
     parser.add_argument("-cu", "--clean_urls", action="store_true",
@@ -101,38 +105,47 @@ def set_values_from_existing(url_id, file_hash):
     sql.update_url(url_id, file_hash, existing[6], existing[8], existing[10], existing[9])
     return 1
 
-def init_driver():
-    #from selenium.webdriver.chrome.options import Options
-    from selenium.webdriver.firefox.options import Options
-    
-    options = Options()
-    
+def init_driver(driver_name):
+    driver = None
+
     ua = UserAgent()
     user_agent = ua.random
-    options.add_argument(f'--user-agent={user_agent}')
 
-    options.add_argument("--headless")
-    #options.setHeadless()
+    if driver_name == "geckodriver":
+        from selenium.webdriver.firefox.options import Options
+    
+        options = Options()
+        options.add_argument(f'--user-agent={user_agent}')
+        options.add_argument("--headless")
+        driver = webdriver.Firefox(options=options)
+    elif driver_name == "chromedriver":
+        from selenium.webdriver.chrome.options import Options
+        
+        options = Options()
+        options.add_argument(f'--user-agent={user_agent}')
 
-    #driver = webdriver.Chrome(
-    #    chrome_options=options, executable_path=config['chromedriver'])
-    #driver = webdriver.Firefox(
-    #    gecko_options=options, executable_path=config['geckodriver'])
-    driver = webdriver.Firefox(options=options)
-
+        # Assume sourcing SETUP.bash puts the chromedriver on PATH
+        # so no longer need to explicitly set this
+        #driver = webdriver.Chrome(chrome_options=options, executable_path=config['chromedriver'])
+        driver = webdriver.Chrome(chrome_options=options)
+    
     return driver
 
-def download_and_save(url_id, url, type, save_dir='downloads', timeout=10):
+
+def download_and_save(url_id, url, download_with_selenium,ignore_robots_txt, save_dir='downloads', timeout=10):
 
     try:
         # Extract root domain from URL
-        #print(f"download_and_save(), url_id={url_id}, url={url}")
-        print(f"download_and_save(), url_id={url_id}")
-        print(f"url={url}")
+        print(f"  download_and_save(), url_id={url_id}")
+        print(f"  url={url}")
         
         parsed_url = urlparse(url)
         root_domain = f"{parsed_url.scheme}://{parsed_url.netloc}"
 
+        if (root_domain == "://"):
+            print(f"URL is a relative link (from the search engine result set page) => skipping")
+            return 0
+        
         # Check robots.txt for the site
 
         # **** XXXX Have looked at some examples where RobotFileParser()
@@ -142,17 +155,18 @@ def download_and_save(url_id, url, type, save_dir='downloads', timeout=10):
         # **** XXXX As all URLs we access have been found by a web search, this means the
         # **** XXXX search engine has crawled this site, so consider having config.json
         # **** XXXX option to skip the robots.txt check
-        
-        rp = RobotFileParser()
-        # The following original line would do the wrong thing on Windows
-        # rp.set_url(os.path.join(root_domain, 'robots.txt'))
-        rp.set_url(root_domain+'/robots.txt')
-        rp.read()
 
-        # Return if not allowed to crawl this URL
-        if not rp.can_fetch("*", url):
-            print(f"Crawling forbidden by robots.txt for URL: {url}")
-            return 0
+        apply_robots_txt = not ignore_robots_txt
+        
+        if (apply_robots_txt):
+            rp = RobotFileParser()
+            rp.set_url(root_domain+'/robots.txt')
+            rp.read()
+
+            # Return if not allowed to crawl this URL
+            if not rp.can_fetch("*", url):
+                print(f"Crawling forbidden by robots.txt for URL: {url}")
+                return 0
 
         # Ensure the save directory exists
         if not os.path.exists(save_dir):
@@ -181,8 +195,8 @@ def download_and_save(url_id, url, type, save_dir='downloads', timeout=10):
             print("Unknown content type: ", content_type)
             return 0
 
-        if doc_type == "html" and (type == const.GOOGLE_SELENIUM or type == const.BING_SELENIUM):
-            driver = init_driver()
+        if doc_type == "html" and download_with_selenium:
+            driver = init_driver(config['driver'])
             driver.get(url)
 
             # Working on the assumption that driver.get() only returns
@@ -233,7 +247,7 @@ def download_and_save(url_id, url, type, save_dir='downloads', timeout=10):
         print(f"Error getting file for {url}: {e}")        
         return 0
     
-def search_and_fetch(query, type, page=1, **kwargs):
+def search_and_fetch(query, search_engine_type, num_pages=1, **kwargs):
     """Fetch Google search results and update"""
     query_id = query[0]
     text = query[1]
@@ -241,35 +255,28 @@ def search_and_fetch(query, type, page=1, **kwargs):
     config = read_config()
 
     # Get where to save the data
-    if type == const.GOOGLE_SELENIUM or type == const.BING_SELENIUM:
-        driver = init_driver()        
-        #options = Options()
-        #ua = UserAgent()
-        #user_agent = ua.random
-        #options.add_argument(f'--user-agent={user_agent}')
-        ##driver = webdriver.Chrome(
-        ##    chrome_options=options, executable_path=config['chromedriver'])
-        ##driver = webdriver.Firefox(
-        ##    gecko_options=options, executable_path=config['geckodriver'])
-        #driver = webdriver.Firefox()
-    if type == const.GOOGLE_SELENIUM:
+    if search_engine_type == const.GOOGLE_SELENIUM or search_engine_type == const.BING_SELENIUM:
+        driver = init_driver(config['driver'])        
+
+    if search_engine_type == const.GOOGLE_SELENIUM:
         engine = const.GOOGLE
-    elif type == const.BING_SELENIUM:
+    elif search_engine_type == const.BING_SELENIUM:
         engine = const.BING
     else:
-        engine = type
+        engine = search_engine_type
+
     count = 1
     urls = []
-    while count <= page:
-        if type == const.GOOGLE:
+    while count <= num_pages:
+        if search_engine_type == const.GOOGLE:
             temp = google(text, count)
-        elif type == const.GOOGLE_SELENIUM:
+        elif search_engine_type == const.GOOGLE_SELENIUM:
             temp = google_selenium(text, driver, count)
-        elif type == const.BING:
+        elif search_engine_type == const.BING:
             temp = bing(text, count)
-        elif type == const.BING_SELENIUM:
+        elif search_engine_type == const.BING_SELENIUM:
             temp = bing_selenium(text, driver, count)
-        elif type == const.GOOGLE_API:
+        elif search_engine_type == const.GOOGLE_API:
             temp = google_api(text, config['google']['key'],
                               config['google']['cx'], count, **kwargs)
             if temp == 429:
@@ -294,15 +301,15 @@ def search_and_fetch(query, type, page=1, **kwargs):
     # print(url_data)
     sql.insert_urls_many(url_data)
 
-def search_worker(sub_queries, search_type, pages):
+def search_worker(sub_queries, search_engine_type, num_pages):
     for query in sub_queries:
         # Check if the stop event is set
         if stop_event.is_set():
             return
-        search_and_fetch(query, search_type, pages)
+        search_and_fetch(query, search_engine_type, num_pages)
         time.sleep(5)
 
-def nlp_worker(sub_urls, search_type, detect:Language, tcount):
+def nlp_worker(sub_urls, download_with_selenium,ignore_robots_txt,  detect:Language, tcount):
     for url in sub_urls:
         if url[7] == 0:
             #print("{0}".format(url))
@@ -314,7 +321,7 @@ def nlp_worker(sub_urls, search_type, detect:Language, tcount):
             # Check if the stop event is set
             if stop_event.is_set():
                 return
-            result = download_and_save(url[0], url[3], search_type)
+            result = download_and_save(url[0], url[3], download_with_selenium,ignore_robots_txt)
             if result == 1:
                 print(f"Thread {tcount} ============ ============ EXISTING URL id {url[0]}")
                 continue
@@ -363,22 +370,22 @@ def validate_args(args):
         valid_langs = [Language.MAORI.name]
         if args.lang and args.lang not in valid_langs:
             raise ValueError(f"Invalid language provided. Valid languages are: {valid_langs}")
-        # Validate word_count, query_count, threads, pages
-        for arg in [args.word_count, args.query_count, args.threads, args.pages]:
+        # Validate word_count, query_count, num_threads, num_pages
+        for arg in [args.word_count, args.query_count, args.num_threads, args.num_pages]:
             if arg and not isinstance(arg, int) and arg <= 0:
                 raise ValueError(
                     f"Expected a positive integer, but got: {arg}")
-        # Validate search_type
-        valid_search_types = [const.GOOGLE, const.GOOGLE_API,
-                              const.GOOGLE_SELENIUM, const.BING, const.BING_API, const.BING_SELENIUM]
-        if args.search_type and args.search_type not in valid_search_types:
+        # Validate search_engine
+        valid_search_engine_types = [const.GOOGLE, const.GOOGLE_API, const.GOOGLE_SELENIUM,
+                                     const.BING,   const.BING_API,   const.BING_SELENIUM]
+        if args.search_engine and args.search_engine not in valid_search_engine_types:
             raise ValueError(
-                f"Invalid search type provided: {args.search_type}")
+                f"Invalid search type provided: {args.search_engine}. Valid options are: {valid_search_engine_types}")
     except Exception as e:
         print(e)
         exit(0)
 
-def display(lang):
+def display_stats(lang):
     print(f"--- Query Statistics for Language: {lang} ---\n")
 
     # Print total Queries with their types
@@ -600,32 +607,32 @@ if __name__ == "__main__":
         config = read_config()
         validate_args(args)
         
-        lang        = args.lang
-        word_count  = args.word_count or config.get('word_count')
-        query_count = args.query_count or config.get('query_count')
-        search_type = args.search_type or config.get('search_type')
-        num_threads = args.threads or config.get('num_threads')
-
-        pages = args.pages or config.get('pages')
-        create_queries = args.create_queries
+        lang          = args.lang
+        word_count    = args.word_count    or config.get('word_count')
+        query_count   = args.query_count   or config.get('query_count')
+        search_engine = args.search_engine or config.get('search_engine')
+        num_threads   = args.num_threads   or config.get('num_threads')
+        num_pages     = args.num_pages     or config.get('num_pages')
+        
+        #only_queries = args.only_queries
 #        extract_dictionary = args.extract_dictionary
         handled = args.handled
         
         # Create the database
         sql.create(reset=False)
-        if args.display:
-            display(lang)
+        if args.display_stats:
+            display_stats(lang)
             exit(0)
 #        # Get dictionary from UDHR PDFs
 #        if extract_dictionary:
 #            extractOrig(reset=False)
 
         # Queries
-        if args.create_queries or args.all:
+        if args.only_queries or args.all:
             print("Running Queries.")
             queries = generate_all(lang, word_count, query_count)
         # Search
-        if args.search or args.all:
+        if args.only_search or args.all:
             print("Running Search.")
             # Get all relevant queries from the database
             queries = sql.get_all_queries(lang, handled)
@@ -637,7 +644,7 @@ if __name__ == "__main__":
             print("Starting search threads.")
             for sub_queries in split_queries:
                 t = threading.Thread(target=search_worker, args=(
-                    sub_queries, search_type, pages))
+                    sub_queries, search_engine, num_pages))
                 threads.append(t)
                 t.start()
             # Wait for all threads to finish
@@ -651,7 +658,7 @@ if __name__ == "__main__":
                 sql.set_query_as_handled(query[0])
             print("All Search-threads have finished.")
         # NLP
-        if args.nlp or args.all:
+        if args.only_nlp or args.all:
             # Get all relevant queries from the database
             urls = sql.get_all_urls(handled)
             print(f"Number of urls to be processed by NLP: {len(urls)}")
@@ -664,7 +671,7 @@ if __name__ == "__main__":
             tcount = 1
             for sub_urls in split_urls:
                 t = threading.Thread(target=nlp_worker, args=(
-                    sub_urls, search_type, Language.MAORI, tcount))
+                    sub_urls, args.download_with_selenium,args.ignore_robots_txt,  Language.MAORI, tcount))
                 threads.append(t)
                 t.start()
                 tcount += 1
@@ -678,7 +685,8 @@ if __name__ == "__main__":
             # for url in urls:
             #     set_url_as_handled(url[0])
             print("All Download+NLP-threads have finished.")
-        display(lang)
+        display_stats(lang)
+        
     except KeyboardInterrupt:
         print("Stopping all threads")
         # Signal all threads to stop

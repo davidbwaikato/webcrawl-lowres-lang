@@ -1,5 +1,6 @@
-fake_useragent==1.5.1
 bs4==0.0.2
+fake_useragent==1.5.1
+json-with-comments=1.2.9
 lingua-language-detector==2.0.2
 nltk==3.8.1
 pdfminer.six==20231228

@@ -1,63 +1,70 @@
 {
-  "chromedriver": "C:\\chromedriver\\chromedriver.exe",
-  "google": {
-    "cx": "?????????????????",
-    "key": "???????????????????????????????????????"
-  },
-  "bing": {
-    "cx": "?????????????????",
-    "key": "???????????????????????????????????????"
-  },
-  "start_page": 1,
-  "word_count": 3,
-  "query_count": 5,
-  "search_type": "google_selenium",
-  "num_threads": 5,
-  "pages": 10,
-  "blacklist": [
-    "www.nzqa.govt.nz",
-    "nzqa.govt.nz",
-    "quizlet.com",
-    "maoridictionary.co.nz",
-    "www.instagram.com",
-    "m.instagram.com",
-    "instagram.com",
-    "www.facebook.com",
-    "m.facebook.com",
-    "facebook.com",
-    "www.google.com",
-    "google.com"
-  ],
-  "languages": {
-    "Hawaiian": {
-      "path": "udhr/udhr-hawaiian.pdf",
-      "cr": "countryUS",
-      "hl": "en",
-      "gl": "us"
+    // If working with either the Google or Bing Search API, then add your key/credentials here
+    "google": {
+	"cx": "?????????????????",
+	"key": "???????????????????????????????????????"
     },
-    "Maori": {
-      "path": "udhr/udhr-maori.pdf",
-      "cr": "countryNZ",
-      "hl": "mi",
-      "gl": "nz"
+    "bing": {
+	"cx": "?????????????????",
+	"key": "???????????????????????????????????????"
     },
-    "Samoan": {
-      "path": "udhr/udhr-samoan.pdf",
-      "cr": "countryWS",
-      "hl": "en",
-      "gl": "ws"
-    },
-    "Tahitian": {
-      "path": "udhr/udhr-tahitian.pdf",
-      "cr": "countryPF",
-      "hl": "en",
-      "gl": "pf"
-    },
-    "Tongan": {
-      "path": "udhr/udhr-tongan.pdf",
-      "cr": "countryTO",
-      "hl": "en",
-      "gl": "to"
+    
+    //"start_page": 1, // currently not supported
+    
+    // Defaults for command-line args
+    "word_count"  : 3,
+    "query_count" : 5,
+    "search_type" : "google",
+    "num_threads" : 5,
+    "num_pages"   : 10,
+    
+    "driver": "geckodriver",
+    //"driver": "chromedriver",
+    
+    "blacklist": [
+	"www.nzqa.govt.nz",
+	"nzqa.govt.nz",
+	"quizlet.com",
+	"maoridictionary.co.nz",
+	"www.instagram.com",
+	"m.instagram.com",
+	"instagram.com",
+	"www.facebook.com",
+	"m.facebook.com",
+	"facebook.com",
+	"www.google.com",
+	"google.com"
+    ],
+    "languages": {
+	"Hawaiian": {
+	    "path": "udhr/udhr-hawaiian.pdf",
+	    "cr": "countryUS",
+	    "hl": "en",
+	    "gl": "us"
+	},
+	"Maori": {
+	    "path": "udhr/udhr-maori.pdf",
+	    "cr": "countryNZ",
+	    "hl": "mi",
+	    "gl": "nz"
+	},
+	"Samoan": {
+	    "path": "udhr/udhr-samoan.pdf",
+	    "cr": "countryWS",
+	    "hl": "en",
+	    "gl": "ws"
+	},
+	"Tahitian": {
+	    "path": "udhr/udhr-tahitian.pdf",
+	    "cr": "countryPF",
+	    "hl": "en",
+	    "gl": "pf"
+	},
+	"Tongan": {
+	    "path": "udhr/udhr-tongan.pdf",
+	    "cr": "countryTO",
+	    "hl": "en",
+	    "gl": "to"
+	}
     }
-  }
 }

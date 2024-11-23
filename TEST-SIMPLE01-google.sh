@@ -1,1 +1,9 @@
-rm -rf querydownload.db downloads && ./lrl-crawler.py --lang MAORI --query_count 1 --search_type google --threads 1 --pages 1 --all
+#!/bin/bash
+
+
+rm -rf querydownload.db downloads \
+    && ./lrl-crawler.py --lang MAORI \
+			--all \
+			--query_count 1 \
+			--search_engine google \
+			--num_threads 1 --num_pages 1 

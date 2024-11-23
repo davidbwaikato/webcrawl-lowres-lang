@@ -1,5 +1,5 @@
 import os
-import json
+import jsonc
 import hashlib
 from const import GOOGLE, GOOGLE_API, BING, BING_API, QUERY, TYPE, TOTAL, MAORI, UNHANDLED, ITEMS
 
@@ -18,21 +18,21 @@ from const import GOOGLE, GOOGLE_API, BING, BING_API, QUERY, TYPE, TOTAL, MAORI,
 def read_config():
     """Read config.json"""
     with open('config.json', 'r', encoding='utf-8') as f:
-        return json.load(f)
+        return jsonc.load(f)
 
 
 def save_to_json(data, filename):
     """Save data to a JSON file"""
     filename = f"{filename}"
     with open(filename, "w", encoding="utf-8") as file:
-        json.dump(data, file, ensure_ascii=False, indent=4)
+        jsonc.dump(data, file, ensure_ascii=False, indent=4)
     return filename
 
 
 # def read_json(filename):
 #     """Read data from a JSON file"""
 #     with open(filename, 'r', encoding="utf-8") as file:
-#         return json.load(file)
+#         return jsonc.load(file)
 
 
 def hash_url(url):
