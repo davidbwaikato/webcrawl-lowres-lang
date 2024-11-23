@@ -19,7 +19,7 @@ supporting python packages:
 ```
   pip3 install --upgrade pip
 
-  pip3 install -r requirements-toplevel.txt
+  pip3 install -r requirements.txt
 ```
 
 Now setup (and edit accordingly) _config.json_:
