@@ -15,6 +15,7 @@ detector = LanguageDetectorBuilder.from_languages(*linguaLanguages).build()
 # from nltk.corpus import stopwords
 # from googletrans import Translator
 
+import globals
 
 # # nltk.download('punkt')
 # # nltk.download('stopwords')
@@ -89,17 +90,27 @@ def extract_text_from_file(filepath, doc_type):
 
 def process_text_in_chunks(text, detect:Language):
     """Gets an optimal chunk size to run paragraph language detection for"""
+
+    if (globals.verbose > 1):
+        print("---- process_text_in_chunks() ----")
+        print(text[:globals.verbose*100])
+        print("----")
+        
     words = text.split()
     num_words = len(words)
+
     short_text_threshold = 50
     medium_text_threshold = 200
     size = 500
+
     if num_words <= short_text_threshold:
         size = 50
     elif num_words <= medium_text_threshold:
         size = 200
+        
     # Split the text into chunks
     paragraphs = [text[i:i + size] for i in range(0, len(text), size)]
+
     # Process each chunk and count paragraphs
     total = len(paragraphs)
     count = 0
@@ -107,6 +118,7 @@ def process_text_in_chunks(text, detect:Language):
         language = detector.detect_language_of(chunk)
         if language == detect:
             count += 1
+
     # Calculate the percentage
     percentage = (count / total) * 100 if total > 0 else 0
     return percentage

@@ -1,9 +1,27 @@
 
-Fix up UNDHR to UDHR
+
+2. Have config option for loading in English full dict and removing any matches
+
+3. Have config option for remove all matches that occur between the different UDHRs?
+
+4. Fix up defaults, so they are the values in config!
+
+5. for simple HTML download, use BS4 to fix up to be UTF8 when downloaded (leave charset for now, or change to orig-charset???)
+
+6. config params for chunking text for NLP
+
+7. 2nd get frequency dict
+
+8. Support of other NLP lang id tools (e.g. fasttest)
+
+
+
+Failed to base64 decode URL: https://www.bing.com/ck/a?!&&p=24a4371c76bf4cdea20a81e1f3589dcdc24c7dde4d6784a3c1455221555d8d1bJmltdHM9MTczMjMyMDAwMA&ptn=3&ver=2&hsh=4&fclid=1f474ee8-e2ec-6f08-10bd-5ba9e3dd6e7b&u=a1aHR0cHM6Ly93d3cuZGljdGlvbmFyeS5tYW9yaS5uei8_bG9va3VwPWluZ29h&ntb=1, thrown exception was: 'utf-8' codec can't decode byte 0xdb in position 34: invalid continuation byte
+
 
 
 ==
-in converting UDHR to freq dict, avoid english words in UNDHR
+in converting UDHR to freq dict, avoid english words in UDHR
 
 
 * spelling out the term words above plus ()
@@ -25,10 +43,8 @@ Me ī-mēra mai ki Infoline@hrc.co.nz
 Pae Ipurangi hrc.co.nz
 
 I suppose OK as they then get filtered out by NLP???
-
-
-
 ===
+
 
 Recaptch causes:
 
@@ -36,15 +52,6 @@ download_and_safe(), url_id=138, url=https://www.procon.co.nz/tuku
 Away to get URL https://www.procon.co.nz/tuku
 Error getting file for https://www.procon.co.nz/tuku: argument of type 'NoneType' is not iterable
 
-====
-
-
-
-URL ://robot.txt protocol
-
- ============ 17:55:21.958107 ============ 150
-download_and_safe(), url_id=150, url=/search?sca_esv=c64f92f75d6f9f24&q=Te+Kohinga+Marama+Marae&ludocid=5006898638420508209&lsig=AB86z5U6idbZzO3aCfKyKNb8obt0&sa=X&ved=2ahUKEwjRnqeJ0eyJAxVvr5UCHRosBhoQgxp6BAhvEAg
-Error getting file for /search?sca_esv=c64f92f75d6f9f24&q=Te+Kohinga+Marama+Marae&ludocid=5006898638420508209&lsig=AB86z5U6idbZzO3aCfKyKNb8obt0&sa=X&ved=2ahUKEwjRnqeJ0eyJAxVvr5UCHRosBhoQgxp6BAhvEAg: unknown url type: '://robots.txt'
 ====
 
 
@@ -71,3 +78,5 @@ NLP for the following said English, but
 99% Maori
 
   https://www.sciencelearn.org.nz/resources/2937-te-tau-koura-he-tikanga-tuturu-mo-te-hopu-me-te-tirotiro-koura  
+==========
+

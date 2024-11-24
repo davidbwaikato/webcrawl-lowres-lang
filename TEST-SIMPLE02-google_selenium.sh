@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -x
 
 rm -rf querydownload.db downloads \
     && ./lrl-crawler.py --lang MAORI \
@@ -6,4 +6,5 @@ rm -rf querydownload.db downloads \
 			--query_count 1 \
 			--search_engine google_selenium \
 			--download_with_selenium \
-			--num_threads 4 --num_pages 1
+			--num_threads 4 --num_pages 2 \
+			$@

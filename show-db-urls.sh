@@ -2,4 +2,4 @@
 
 db_filename="${1:-querydownload.db}"
 
-echo 'select * from urls;' | sqlite3 "$db_filename"
+echo -e '.headers on \nselect * from urls;' | sqlite3 "$db_filename"

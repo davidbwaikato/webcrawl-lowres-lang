@@ -17,6 +17,8 @@
     "search_type" : "google",
     "num_threads" : 5,
     "num_pages"   : 10,
+
+    "sleep_delay" : 5,
     
     "driver": "geckodriver",
     //"driver": "chromedriver",
@@ -35,6 +37,7 @@
 	"www.google.com",
 	"google.com"
     ],
+    
     "languages": {
 	"Hawaiian": {
 	    "path": "udhr/udhr-hawaiian.pdf",

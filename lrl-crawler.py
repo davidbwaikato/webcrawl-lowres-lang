@@ -1,26 +1,25 @@
 #!/usr/bin/env python3
 
-import os
-import time
-import random
-import shutil
-import hashlib
 import argparse
+import base64
+import hashlib
+import os
+import random
 import requests
+import shutil
 import threading
+import time
 
 from fake_useragent import UserAgent
 from selenium import webdriver
 
-from nlp import extract_text_from_file, run_nlp_algorithms, clean_text
 from lingua import Language
 requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
 
-import datetime
+from datetime import datetime
 from requests.exceptions import Timeout
 from urllib.parse import urlparse, parse_qs
 
-import base64
 from urllib.parse import urlparse
 from urllib.robotparser import RobotFileParser
 
@@ -30,11 +29,15 @@ import sql
 import ssl
 ssl._create_default_https_context = ssl._create_unverified_context
 
+# LRL specific modules
 
 import const
-from queries import generate_all
-from helpers import hash_url, read_config, remove_blacklisted
-from search import google, google_selenium, google_api, bing, bing_selenium
+import globals
+
+import helpers
+import nlp
+import queries
+import search
 
 
 stop_event = threading.Event()
@@ -47,16 +50,18 @@ def get_args():
     parser = argparse.ArgumentParser(description="Arguments that can be used")
     parser.add_argument("-l", "--lang", default=Language.MAORI.name,
                         help=f"language used for generating queries [Default={Language.MAORI.name}]")
+    parser.add_argument("-v", "--verbose", type=int,
+                        default=1, help=f"level of verbosity used for output [Default=1]")
     parser.add_argument("-wc", "--word_count", type=int,
                         default=3, help=f"how many words are used in a 'combined', 'phrase', and 'common_uncommon' generated query [Default=3]")
     parser.add_argument("-qc", "--query_count", type=int,
                         default=5, help=f"how many queries of each type (single, combine, phrase, common_uncommon) are generated [Default=5]")
     parser.add_argument("-se", "--search_engine",
-                        default=const.GOOGLE_SELENIUM, help=f"search engine used [Default={const.GOOGLE}]")
+                        default=const.GOOGLE, help=f"search engine used [Default={const.GOOGLE}]")
     parser.add_argument("-dws", "--download_with_selenium", action="store_true",
                         default=False, help=f"use Selenium-controlled web browser for page downloads [Default=False]")
-    parser.add_argument("-irt", "--ignore_robots_txt", action="store_true",
-                        default=False, help=f"as the pages 'lrl-crawler.py' detects have been located via a web search engine, the site has already been crawled, giving reasonable grounds for skipping the scripts built-in robots.txt [Default=False]")
+    parser.add_argument("-art", "--apply_robots_txt", action="store_true",
+                        default=False, help=f"use this option to turn on the robots.txt check (note: as the pages 'lrl-crawler.py' detects have been located via a web search engine, the identified download page has already been crawled, making it a reasonable assumption for 'lrl-crawler.pl' to skip this check, which is why it off by default) [Default=False]")
 
     parser.add_argument("-nt", "--num_threads", type=int,
                         default=5, help=f"the number of threads that are used to run the querying and NLP processsing stages [Default=5]")
@@ -88,7 +93,9 @@ def get_args():
                         default=False, help="Testing flag")
     parser.add_argument("-test", "--test", action="store_true",
                         default=False, help="Testing flag")
+    
     return parser.parse_args()
+
 
 def delete_file(path):
     try:
@@ -104,6 +111,12 @@ def set_values_from_existing(url_id, file_hash):
         return 0
     sql.update_url(url_id, file_hash, existing[6], existing[8], existing[10], existing[9])
     return 1
+
+# Consider working with web-driver!!!
+#  https://www.geeksforgeeks.org/get-all-text-of-the-page-using-selenium-in-python/
+
+# From Sulan's earlier work:
+#   https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/116.0.5845.96/win64/chromedriver-win64.zip
 
 def init_driver(driver_name):
     driver = None
@@ -124,15 +137,14 @@ def init_driver(driver_name):
         options = Options()
         options.add_argument(f'--user-agent={user_agent}')
 
-        # Assume sourcing SETUP.bash puts the chromedriver on PATH
-        # so no longer need to explicitly set this
-        #driver = webdriver.Chrome(chrome_options=options, executable_path=config['chromedriver'])
+        # Assume sourcing SETUP.bash puts the chromedriver on PATH, so no longer need to explicitly set this
+        #driver = webdriver.Chrome(chrome_options=options, executable_path=globals.config['chromedriver'])
         driver = webdriver.Chrome(chrome_options=options)
     
     return driver
 
 
-def download_and_save(url_id, url, download_with_selenium,ignore_robots_txt, save_dir='downloads', timeout=10):
+def download_and_save(url_id, url, download_with_selenium,apply_robots_txt, save_dir='downloads', timeout=10):
 
     try:
         # Extract root domain from URL
@@ -145,20 +157,18 @@ def download_and_save(url_id, url, download_with_selenium,ignore_robots_txt, sav
         if (root_domain == "://"):
             print(f"URL is a relative link (from the search engine result set page) => skipping")
             return 0
-        
-        # Check robots.txt for the site
 
-        # **** XXXX Have looked at some examples where RobotFileParser()
-        # **** XXXX has rejected the URL, however a manual check of 'robots.txt'
-        # **** XXXX looks to be fine for downloading the given URL
-        # =>
-        # **** XXXX As all URLs we access have been found by a web search, this means the
-        # **** XXXX search engine has crawled this site, so consider having config.json
-        # **** XXXX option to skip the robots.txt check
-
-        apply_robots_txt = not ignore_robots_txt
+        # Found some examples where RobotFileParser() returned False, but a manual check
+        # of the robots.txt file for that site show the URL to be OK for downloading
+        #
+        # ?? Maybe something to do with Crawl-Rate field (??), however a specially built
+        #    test case with sleep() also failed
+        #
+        # => As all URLs we access have been found by a web search, support a config setting
+        #    option for skipping the test
         
         if (apply_robots_txt):
+            
             rp = RobotFileParser()
             rp.set_url(root_domain+'/robots.txt')
             rp.read()
@@ -196,7 +206,7 @@ def download_and_save(url_id, url, download_with_selenium,ignore_robots_txt, sav
             return 0
 
         if doc_type == "html" and download_with_selenium:
-            driver = init_driver(config['driver'])
+            driver = init_driver(globals.config['driver'])
             driver.get(url)
 
             # Working on the assumption that driver.get() only returns
@@ -252,11 +262,11 @@ def search_and_fetch(query, search_engine_type, num_pages=1, **kwargs):
     query_id = query[0]
     text = query[1]
     driver = None
-    config = read_config()
+    ##config = helpers.read_config() # **** XXXX
 
     # Get where to save the data
     if search_engine_type == const.GOOGLE_SELENIUM or search_engine_type == const.BING_SELENIUM:
-        driver = init_driver(config['driver'])        
+        driver = init_driver(globals.config['driver'])        
 
     if search_engine_type == const.GOOGLE_SELENIUM:
         engine = const.GOOGLE
@@ -269,16 +279,16 @@ def search_and_fetch(query, search_engine_type, num_pages=1, **kwargs):
     urls = []
     while count <= num_pages:
         if search_engine_type == const.GOOGLE:
-            temp = google(text, count)
+            temp = search.google(text, count)
         elif search_engine_type == const.GOOGLE_SELENIUM:
-            temp = google_selenium(text, driver, count)
+            temp = search.google_selenium(text, driver, count)
         elif search_engine_type == const.BING:
-            temp = bing(text, count)
+            temp = search.bing(text, count)
         elif search_engine_type == const.BING_SELENIUM:
-            temp = bing_selenium(text, driver, count)
+            temp = search.bing_selenium(text, driver, count)
         elif search_engine_type == const.GOOGLE_API:
-            temp = google_api(text, config['google']['key'],
-                              config['google']['cx'], count, **kwargs)
+            temp = search.google_api(text, globals.config['google']['key'],
+                              globals.config['google']['cx'], count, **kwargs)
             if temp == 429:
                 print("Google API rate limit reached, exiting.")
                 stop_event.set()
@@ -292,11 +302,11 @@ def search_and_fetch(query, search_engine_type, num_pages=1, **kwargs):
     if driver:
         driver.quit()
     # Remove blacklisted URLs
-    urls = remove_blacklisted(urls, config['blacklist'])
+    urls = helpers.remove_blacklisted(urls, globals.config['blacklist'])
     if len(urls) == 0:
         return
     # Prepare the URL data for insertion
-    url_data = [(query_id, engine, url, hash_url(url), True) for url in urls]
+    url_data = [(query_id, engine, url, helpers.hash_url(url), True) for url in urls]
     # Insert URLs into the database (only the new ones)
     # print(url_data)
     sql.insert_urls_many(url_data)
@@ -309,19 +319,19 @@ def search_worker(sub_queries, search_engine_type, num_pages):
         search_and_fetch(query, search_engine_type, num_pages)
         time.sleep(5)
 
-def nlp_worker(sub_urls, download_with_selenium,ignore_robots_txt,  detect:Language, tcount):
+def nlp_worker(sub_urls, download_with_selenium,apply_robots_txt,  detect:Language, tcount):
     for url in sub_urls:
         if url[7] == 0:
             #print("{0}".format(url))
             #print("{0} {1}".format(url[0], url[7]))
             continue
-        now = datetime.datetime.now()
-        print(f"Thread {tcount} ============ NLP Stage {now.time()} ============ URL id {url[0]}")
+        now = datetime.now()
+        print(f"Thread {tcount} ============ NLP Stage @ {now.strftime('%H:%M:%S')} ============ URL id {url[0]}")
         try:
             # Check if the stop event is set
             if stop_event.is_set():
                 return
-            result = download_and_save(url[0], url[3], download_with_selenium,ignore_robots_txt)
+            result = download_and_save(url[0], url[3], download_with_selenium,apply_robots_txt)
             if result == 1:
                 print(f"Thread {tcount} ============ ============ EXISTING URL id {url[0]}")
                 continue
@@ -329,13 +339,13 @@ def nlp_worker(sub_urls, download_with_selenium,ignore_robots_txt,  detect:Langu
                 sql.set_url_as_handled(url[0])
                 continue
 
-            extracted_text = extract_text_from_file(result["path"], result["doc_type"])
+            extracted_text = nlp.extract_text_from_file(result["path"], result["doc_type"])
             if extracted_text == None:
                 sql.set_url_as_handled(url[0])
                 print(f"Thread {tcount} xxxxxxxxxxxx deleting (no extracted text) xxxxxxxxxxxx")
                 delete_file(result["path"])                
                 continue
-            cleaned_extracted_text = clean_text(extracted_text)
+            cleaned_extracted_text = nlp.clean_text(extracted_text)
             # Guard against the cleaned text now being nothing but 100% whitespace
             if cleaned_extracted_text.isspace():
                 sql.set_url_as_handled(url[0])
@@ -343,7 +353,7 @@ def nlp_worker(sub_urls, download_with_selenium,ignore_robots_txt,  detect:Langu
                 delete_file(result["path"])                                
                 continue            
 
-            langs = run_nlp_algorithms(cleaned_extracted_text, Language.MAORI.name) # **** XXXX
+            langs = nlp.run_nlp_algorithms(cleaned_extracted_text, Language.MAORI.name) # **** XXXX
             if langs["lingua"]["lang"] == None:
                 sql.set_url_as_handled(url[0])
                 print(f"Thread {tcount} xxxxxxxxxxxx deleting (NLP failed to detect language) xxxxxxxxxxxx")
@@ -354,10 +364,10 @@ def nlp_worker(sub_urls, download_with_selenium,ignore_robots_txt,  detect:Langu
                 delete_file(result["path"])
                 
             sql.update_url(url[0], result["hash"], result["doc_type"], langs["lingua"]["lang"], langs["lingua"]["condifence"], langs["lingua"]["percentage"])
-            # print("{0} {1} {2} HANDLED".format(tcount, url[0], now.time()))
+            # print("{0} {1} {2} HANDLED".format(tcount, url[0], @ now.strftime('%H:%M:%S')))
 
         except FileNotFoundError as e:
-            # print("{0} {1} {2} HANDLED".format(tcount, url[0], now.time()))
+            # print("{0} {1} {2} HANDLED".format(tcount, url[0], @ now.strftime('%H:%M:%S')))
             sql.set_url_as_handled(url[0])
             print(f"Thread {tcount} File not found")
         except Exception as e:
@@ -368,19 +378,21 @@ def validate_args(args):
     try:
         # Validate lang
         valid_langs = [Language.MAORI.name]
-        if args.lang and args.lang not in valid_langs:
+        if globals.args.lang and globals.args.lang not in valid_langs:
             raise ValueError(f"Invalid language provided. Valid languages are: {valid_langs}")
+        
         # Validate word_count, query_count, num_threads, num_pages
-        for arg in [args.word_count, args.query_count, args.num_threads, args.num_pages]:
+        for arg in [globals.args.word_count, globals.args.query_count, globals.args.num_threads, globals.args.num_pages]:
             if arg and not isinstance(arg, int) and arg <= 0:
                 raise ValueError(
                     f"Expected a positive integer, but got: {arg}")
+            
         # Validate search_engine
         valid_search_engine_types = [const.GOOGLE, const.GOOGLE_API, const.GOOGLE_SELENIUM,
                                      const.BING,   const.BING_API,   const.BING_SELENIUM]
-        if args.search_engine and args.search_engine not in valid_search_engine_types:
+        if globals.args.search_engine and globals.args.search_engine not in valid_search_engine_types:
             raise ValueError(
-                f"Invalid search type provided: {args.search_engine}. Valid options are: {valid_search_engine_types}")
+                f"Invalid search type provided: {globals.args.search_engine}. Valid options are: {valid_search_engine_types}")
     except Exception as e:
         print(e)
         exit(0)
@@ -591,36 +603,38 @@ def test():
     exit(0)
 
 if __name__ == "__main__":
-    args = get_args()
-    if args.test:
+    #args = get_args()
+    globals.args = get_args()
+    globals.verbose = globals.args.verbose
+    globals.config = helpers.read_config()
+        
+    if globals.args.test:
         test()
-    if args.set_queries_unhandled:
+    if globals.args.set_queries_unhandled:
         sql.set_all_queries_unhandled()
         print("Set all queries as unhandled.")
-    if args.clean_urls:
+    if globals.args.clean_urls:
         print("Cleaning URLs in database (this might take a while).")
         urls = sql.get_all_urls()
         final_urls = clean_urls(urls)
         print("Finished cleaning URLs in database.")
         exit(0)
     try:
-        config = read_config()
-        validate_args(args)
+
+        validate_args(globals.args)
         
-        lang          = args.lang
-        word_count    = args.word_count    or config.get('word_count')
-        query_count   = args.query_count   or config.get('query_count')
-        search_engine = args.search_engine or config.get('search_engine')
-        num_threads   = args.num_threads   or config.get('num_threads')
-        num_pages     = args.num_pages     or config.get('num_pages')
+        lang          = globals.args.lang
+        word_count    = globals.args.word_count    or globals.config.get('word_count')
+        query_count   = globals.args.query_count   or globals.config.get('query_count')
+        search_engine = globals.args.search_engine or globals.config.get('search_engine')
+        num_threads   = globals.args.num_threads   or globals.config.get('num_threads')
+        num_pages     = globals.args.num_pages     or globals.config.get('num_pages')
         
-        #only_queries = args.only_queries
-#        extract_dictionary = args.extract_dictionary
-        handled = args.handled
+        handled = globals.args.handled
         
         # Create the database
         sql.create(reset=False)
-        if args.display_stats:
+        if globals.args.display_stats:
             display_stats(lang)
             exit(0)
 #        # Get dictionary from UDHR PDFs
@@ -628,11 +642,11 @@ if __name__ == "__main__":
 #            extractOrig(reset=False)
 
         # Queries
-        if args.only_queries or args.all:
+        if globals.args.only_queries or globals.args.all:
             print("Running Queries.")
-            queries = generate_all(lang, word_count, query_count)
+            queries = queries.generate_all(lang, word_count, query_count)
         # Search
-        if args.only_search or args.all:
+        if globals.args.only_search or globals.args.all:
             print("Running Search.")
             # Get all relevant queries from the database
             queries = sql.get_all_queries(lang, handled)
@@ -658,20 +672,21 @@ if __name__ == "__main__":
                 sql.set_query_as_handled(query[0])
             print("All Search-threads have finished.")
         # NLP
-        if args.only_nlp or args.all:
+        if globals.args.only_nlp or globals.args.all:
             # Get all relevant queries from the database
             urls = sql.get_all_urls(handled)
             print(f"Number of urls to be processed by NLP: {len(urls)}")
             # Split queries into sub-lists for each thread
             split_urls = [urls[i::num_threads]
                              for i in range(num_threads)]
+
             # Create and start threads
             threads = []
             print("Starting nlp threads.")
             tcount = 1
             for sub_urls in split_urls:
                 t = threading.Thread(target=nlp_worker, args=(
-                    sub_urls, args.download_with_selenium,args.ignore_robots_txt,  Language.MAORI, tcount))
+                    sub_urls, globals.args.download_with_selenium,globals.args.apply_robots_txt,  Language.MAORI, tcount))
                 threads.append(t)
                 t.start()
                 tcount += 1
