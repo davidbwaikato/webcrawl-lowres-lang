@@ -145,7 +145,7 @@ def init_driver(driver_name):
     return driver
 
 
-def download_and_save(url_id, url, download_with_selenium,apply_robots_txt, save_dir='downloads', timeout=10):
+def download_and_save(url_id, url, download_with_selenium,apply_robots_txt, save_dir='downloads', url_timeout=10):
 
     try:
         # Extract root domain from URL
@@ -189,7 +189,7 @@ def download_and_save(url_id, url, download_with_selenium,apply_robots_txt, save
 
         driver = None
         
-        response = requests.get(url, verify=False, timeout=timeout, allow_redirects=True)
+        response = requests.get(url, verify=False, timeout=url_timeout, allow_redirects=True)
         if response.status_code != 200:
             return 0
         
@@ -339,7 +339,8 @@ def nlp_worker(sub_urls, download_with_selenium,apply_robots_txt,  detect:Langua
             # Check if the stop event is set
             if stop_event.is_set():
                 return
-            result = download_and_save(url[0], url[3], download_with_selenium,apply_robots_txt, globals.config['downloads_dir'])
+            result = download_and_save(url[0], url[3], download_with_selenium,apply_robots_txt,
+                                       globals.config['downloads_dir'], globals.config['url_timeout'])
             if result == 1:
                 print(f"Thread {tcount} ============ ============ EXISTING URL id {url[0]}")
                 continue
