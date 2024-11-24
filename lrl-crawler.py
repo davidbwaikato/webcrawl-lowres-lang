@@ -179,9 +179,10 @@ def download_and_save(url_id, url, download_with_selenium,apply_robots_txt, save
                 print(f"Crawling forbidden by robots.txt for URL: {url}")
                 return 0
 
+        # **** XXXX
         # Ensure the save directory exists
-        if not os.path.exists(save_dir):
-            os.makedirs(save_dir)
+        #if not os.path.exists(save_dir):
+        #    os.makedirs(save_dir)
 
         # Fetch the content with a timeout and allow redirects
         #print(f"Away to get URL {url}")
@@ -311,13 +312,20 @@ def search_and_fetch(query, search_engine_type, num_pages=1, **kwargs):
     # print(url_data)
     sql.insert_urls_many(url_data)
 
-def search_worker(sub_queries, search_engine_type, num_pages):
+def search_worker(sub_queries, search_engine_type, num_pages, tcount):
     for query in sub_queries:
         # Check if the stop event is set
         if stop_event.is_set():
             return
+
+        now = datetime.now()
+        print(f"Thread {tcount} ============ Search Stage @ {now.strftime('%H:%M:%S')} ============ query: {query}")
         search_and_fetch(query, search_engine_type, num_pages)
-        time.sleep(5)
+
+        sleep_delay = globals.config['sleep_delay']
+        randomized_sleep_delay = sleep_delay + random.randint(0,sleep_delay)
+        print(f"  pausing for {randomized_sleep_delay} secs")
+        time.sleep(randomized_sleep_delay)
 
 def nlp_worker(sub_urls, download_with_selenium,apply_robots_txt,  detect:Language, tcount):
     for url in sub_urls:
@@ -331,7 +339,7 @@ def nlp_worker(sub_urls, download_with_selenium,apply_robots_txt,  detect:Langua
             # Check if the stop event is set
             if stop_event.is_set():
                 return
-            result = download_and_save(url[0], url[3], download_with_selenium,apply_robots_txt)
+            result = download_and_save(url[0], url[3], download_with_selenium,apply_robots_txt, globals.config['downloads_dir'])
             if result == 1:
                 print(f"Thread {tcount} ============ ============ EXISTING URL id {url[0]}")
                 continue
@@ -607,7 +615,7 @@ if __name__ == "__main__":
     globals.args = get_args()
     
     globals.verbose = globals.args.verbose
-        
+    
     if globals.args.test:
         test()
     if globals.args.set_queries_unhandled:
@@ -631,6 +639,11 @@ if __name__ == "__main__":
         num_pages     = globals.args.num_pages     or globals.config.get('num_pages')
         
         handled = globals.args.handled
+
+        # Ensure the downloads directory exists
+        downloads_dir = globals.config.get('downloads_dir')
+        if not os.path.exists(downloads_dir):
+            os.makedirs(downloads_dir)
         
         # Create the database
         sql.create(reset=False)
@@ -656,11 +669,15 @@ if __name__ == "__main__":
             # Create and start threads
             threads = []
             print("Starting search threads.")
+            tcount = 1
+            
             for sub_queries in split_queries:
                 t = threading.Thread(target=search_worker, args=(
-                    sub_queries, search_engine, num_pages))
+                    sub_queries, search_engine, num_pages, tcount))
                 threads.append(t)
                 t.start()
+                tcount += 1
+                
             # Wait for all threads to finish
             for t in threads:
                 if stop_event.is_set():
