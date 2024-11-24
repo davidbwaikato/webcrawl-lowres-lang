@@ -1,4 +1,6 @@
 {
+    "downloads_dir" : "downloads",
+    
     // If working with either the Google or Bing Search API, then add your key/credentials here
     "google": {
 	"cx": "?????????????????",
@@ -18,7 +20,8 @@
     "num_threads"   : 5,
     "num_pages"     : 10,
 
-    "sleep_delay" : 5,
+    "url_timeout" : 10, // secs
+    "sleep_delay" : 5,  // secs
     
     "driver": "geckodriver",
     //"driver": "chromedriver",
