@@ -10,14 +10,11 @@
 
 6. config params for chunking text for NLP
 
-7. 2nd get frequency dict
+7. 2nd phase get frequency dict
 
-8. Support of other NLP lang id tools (e.g. fasttest)
+8. Support of other NLP lang id tools (e.g. FastText)
 
-
-
-Failed to base64 decode URL: https://www.bing.com/ck/a?!&&p=24a4371c76bf4cdea20a81e1f3589dcdc24c7dde4d6784a3c1455221555d8d1bJmltdHM9MTczMjMyMDAwMA&ptn=3&ver=2&hsh=4&fclid=1f474ee8-e2ec-6f08-10bd-5ba9e3dd6e7b&u=a1aHR0cHM6Ly93d3cuZGljdGlvbmFyeS5tYW9yaS5uei8_bG9va3VwPWluZ29h&ntb=1, thrown exception was: 'utf-8' codec can't decode byte 0xdb in position 34: invalid continuation byte
-
+9. Remove hardwirded Language.MAORI
 
 
 ==

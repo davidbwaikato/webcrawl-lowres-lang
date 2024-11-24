@@ -22,14 +22,16 @@ supporting python packages:
   pip3 install -r requirements.txt
 ```
 
-Now setup (and edit accordingly) _config.json_:
+Now review (and edit if needed) _config.json_:
 ```
-  /bin/cp config.json.in config.json
   emacs config.json
 ```
 
 If you are going to be using the official Google or Bing API calls,
-then you will need to add the relevant key(s) here.
+then you will need to add the relevant key(s) here.  Note, for
+commonly changed values, such as 'search_engine' and 'num_threads',
+command-line options can be provided to override the config default
+values
 
 ## Working with Selenium
 

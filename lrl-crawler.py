@@ -34,7 +34,7 @@ ssl._create_default_https_context = ssl._create_unverified_context
 import const
 import globals
 
-import helpers
+import utils
 import nlp
 import queries
 import search
@@ -52,40 +52,41 @@ def get_args():
                         help=f"language used for generating queries [Default={Language.MAORI.name}]")
     parser.add_argument("-v", "--verbose", type=int,
                         default=1, help=f"level of verbosity used for output [Default=1]")
-    parser.add_argument("-wc", "--word_count", type=int,
-                        default=3, help=f"how many words are used in a 'combined', 'phrase', and 'common_uncommon' generated query [Default=3]")
-    parser.add_argument("-qc", "--query_count", type=int,
-                        default=5, help=f"how many queries of each type (single, combine, phrase, common_uncommon) are generated [Default=5]")
-    parser.add_argument("-se", "--search_engine",
-                        default=const.GOOGLE, help=f"search engine used [Default={const.GOOGLE}]")
+
+    parser.add_argument("-wc", "--word_count", type=int, default=globals.config['word_count'],
+                        help=f"how many words are used in a 'combined', 'phrase', and 'common_uncommon' generated query [Config Default={globals.config['word_count']}]")
+    parser.add_argument("-qc", "--query_count", type=int, default=globals.config['query_count'],
+                        help=f"how many queries of each type (single, combine, phrase, common_uncommon) are generated [Config Default={globals.config['query_count']}]")
+    parser.add_argument("-se", "--search_engine", default=globals.config['search_engine'],
+                        help=f"search engine used [Config Default={globals.config['search_engine']}]")
     parser.add_argument("-dws", "--download_with_selenium", action="store_true",
                         default=False, help=f"use Selenium-controlled web browser for page downloads [Default=False]")
     parser.add_argument("-art", "--apply_robots_txt", action="store_true",
                         default=False, help=f"use this option to turn on the robots.txt check (note: as the pages 'lrl-crawler.py' detects have been located via a web search engine, the identified download page has already been crawled, making it a reasonable assumption for 'lrl-crawler.pl' to skip this check, which is why it off by default) [Default=False]")
 
-    parser.add_argument("-nt", "--num_threads", type=int,
-                        default=5, help=f"the number of threads that are used to run the querying and NLP processsing stages [Default=5]")
+    parser.add_argument("-nt", "--num_threads", type=int, default=globals.config['num_threads'],
+                        help=f"the number of threads that are used to run the querying and NLP processsing stages [Config Default={globals.config['num_threads']}]")
 
 # The following is not currently supported
 #    parser.add_argument("-sp", "--start_page", type=int, default=0,
 #                        help=f"effectively, how many search result pages to skip over before processing results [Default=0]")
-    parser.add_argument("-np", "--num_pages", type=int, default=5,
-                        help=f"number of pages of search results to process (x 4, for each query type) [Default=5]")
+    parser.add_argument("-np", "--num_pages", type=int, default=globals.config['num_pages'],
+                        help=f"number of pages of search results to process (x 4, for each query type) [Config Default={globals.config['num_pages']}]")
 
     parser.add_argument("-uh", "--handled", action="store_true",
-                        default=True, help="Flag to get use handled queries or urls")
+                        default=True, help="flag to get use handled queries or urls")
 
     parser.add_argument("-a",  "--all", action="store_true",
-                        default=False, help="Flag to create queries, search and run NLP")
+                        default=False, help="flag to create queries, search and run NLP")
     parser.add_argument("-oq", "--only_queries", action="store_true",
-                        default=False, help="Flag to only create queries")
+                        default=False, help="flag to only create queries")
     parser.add_argument("-os", "--only_search", action="store_true",
-                        default=False, help="Flag to only search queries")
+                        default=False, help="flag to only search queries")
     parser.add_argument("-on", "--only_nlp", action="store_true",
-                        default=False, help="Flag to only run NLP on URLs")
+                        default=False, help="flag to only run NLP on URLs")
 
     parser.add_argument("-d",  "--display_stats", action="store_true",
-                        default=False, help="Flag to show details")
+                        default=False, help="flag to show details")
 
     parser.add_argument("-sau", "--set_queries_unhandled", action="store_true",
                         default=False, help="Flag to set all queries as unhandled")
@@ -262,7 +263,6 @@ def search_and_fetch(query, search_engine_type, num_pages=1, **kwargs):
     query_id = query[0]
     text = query[1]
     driver = None
-    ##config = helpers.read_config() # **** XXXX
 
     # Get where to save the data
     if search_engine_type == const.GOOGLE_SELENIUM or search_engine_type == const.BING_SELENIUM:
@@ -302,11 +302,11 @@ def search_and_fetch(query, search_engine_type, num_pages=1, **kwargs):
     if driver:
         driver.quit()
     # Remove blacklisted URLs
-    urls = helpers.remove_blacklisted(urls, globals.config['blacklist'])
+    urls = utils.remove_blacklisted(urls, globals.config['blacklist'])
     if len(urls) == 0:
         return
     # Prepare the URL data for insertion
-    url_data = [(query_id, engine, url, helpers.hash_url(url), True) for url in urls]
+    url_data = [(query_id, engine, url, utils.hash_url(url), True) for url in urls]
     # Insert URLs into the database (only the new ones)
     # print(url_data)
     sql.insert_urls_many(url_data)
@@ -603,10 +603,10 @@ def test():
     exit(0)
 
 if __name__ == "__main__":
-    #args = get_args()
+    globals.config = utils.read_config()
     globals.args = get_args()
+    
     globals.verbose = globals.args.verbose
-    globals.config = helpers.read_config()
         
     if globals.args.test:
         test()

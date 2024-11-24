@@ -12,11 +12,11 @@
     //"start_page": 1, // currently not supported
     
     // Defaults for command-line args
-    "word_count"  : 3,
-    "query_count" : 5,
-    "search_type" : "google",
-    "num_threads" : 5,
-    "num_pages"   : 10,
+    "word_count"    : 3,
+    "query_count"   : 5,
+    "search_engine" : "google",
+    "num_threads"   : 5,
+    "num_pages"     : 10,
 
     "sleep_delay" : 5,
     

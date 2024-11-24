@@ -1,4 +1,6 @@
+
 import base64
+import re
 import requests
 
 from bs4 import BeautifulSoup
@@ -87,6 +89,15 @@ def google_selenium(query, driver, page=1):
 
 def google_api(query, api_key, cx, page, **kwargs):
     """Fetch results from Google using the API"""
+
+    if (re.match(r'^\?+$',api_key)):
+        print(f"google_api(): 'api_key' is set to '{api_key}'. Have you edit config.json to provide your Google key?")
+        return []
+    
+    if (re.match(r'^\?$',cx)):
+        print(f"google_api(): 'cx' credentials is set of '{cx}'. Have you edit config.json to provide your Google credentials?")
+        return []
+
     print(f"Running Google API for: {query}, page {page}")
     start = (page - 1) * 10
     base_url = "https://www.googleapis.com/customsearch/v1"
@@ -222,21 +233,24 @@ def bing_selenium(query, driver, page=1):
             link = anchor[0].get_attribute("href")
             urls.append(str(link))
             
-        # Try to decode URL if final URL is encoded
-        #for url in urls:
-        #    if 'bing.com' in url:
-        #        query_params = parse_qs(urlparse(url[3]).query)
-        #        if 'u' in query_params:
-        #            encoded_url = query_params['u'][0]
-        #        try:
-        #            temp = "{0}{1}".format(encoded_url[2:], "==")
-        #            url = base64.b64decode(temp).decode("utf-8")
-        #        except Exception:
-        #            continue
-                
         processed_urls = bing_base64_decode(urls)                
         return processed_urls
     
     except Exception as e:
         print(f"An error occurred: {e}")
         return []
+
+    
+def bing_api(query, api_key, cx, page, **kwargs):
+    """Fetch results from Bing using the API"""
+    print(f"Currently not implemented: Bing API for: {query}, page {page}")
+
+    #if (re.match(r'^\?+$',api_key)):
+    #    print(f"bing_api(): 'api_key' is set of '{api_key}'. Have you edit config.json to provide your Bing key?")
+    #    return []
+    
+    #if (re.match(r'^\?$',cx)):
+    #    print(f"binge_api(): 'cx' credentials is set to '{cx}'. Have you edit config.json to provide your Bing credentials?")
+    #    return []
+    
+    return []

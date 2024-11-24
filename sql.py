@@ -1,7 +1,8 @@
 import sqlite3
 import time
+import utils
+
 from contextlib import contextmanager
-from helpers import hash_url
 from urllib.parse import urlparse
 
 dbname = "querydownload.db"
@@ -64,7 +65,7 @@ def insert_query(query, type, lan):
 def insert_url(query_id, type, url, doc_type=""):
     """Insert a new URL into the urls table."""
     with get_cursor() as cursor:
-        url_hash = hash_url(url)
+        url_hash = utils.hash_url(url)
         cursor.execute("""
             INSERT INTO urls (query_id, type, url, url_hash, doc_type)
             VALUES (?, ?, ?, ?, ?)
@@ -122,7 +123,7 @@ def save_bing_url(url_id, final_url):
 def insert_url_if_not_exists(query_id, type, url, doc_type=""):
     """Insert a URL into the urls table if it doesn't already exist."""
     with get_cursor() as cursor:
-        url_hash = hash_url(url)
+        url_hash = utils.hash_url(url)
         cursor.execute(
             "SELECT EXISTS(SELECT 1 FROM urls WHERE url_hash=?)", (url_hash,))
         if not bool(cursor.fetchone()[0]):

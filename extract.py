@@ -5,7 +5,9 @@ import sys
 
 from collections import Counter
 from pdfminer.high_level import extract_text as pdfminer_extract_text
-from helpers import read_config, save_to_json
+
+import globals
+import utils
 
 
 def extract_text(path):
@@ -42,8 +44,7 @@ def get_common_words(tokens, min_length=3):
 
 def extractDEPRECATED(reset=False):
     """Process each file and save results to JSON"""
-    config = read_config()
-    languages = config['languages']
+    languages = globals.config['languages']
     for language, item in languages.items():
         file_path = item['path']
         if file_path.endswith('.pdf'):
@@ -58,7 +59,7 @@ def extractDEPRECATED(reset=False):
         filename = f"dicts/common_words_{language.lower()}.json"
         # Check if file exists and act according to `reset` parameter
         if not os.path.exists(filename) or reset:
-            save_to_json(dict(common_words), filename)
+            utils.save_to_json(dict(common_words), filename)
         else:
             print(f"{filename} already exists.  As function argument 'reset'={reset}, not overwriting file")
 
@@ -66,8 +67,7 @@ def extractDEPRECATED(reset=False):
 def extractNew(lang,force=False,verbose=False):
     """Process each file and save results to JSON"""
 
-    config = read_config()
-    languages = config['languages']
+    languages = globals.config['languages']
 
     for language, item in languages.items():
         # print(f"args.lang={lang}, language = {language}")
@@ -95,7 +95,7 @@ def extractNew(lang,force=False,verbose=False):
             
         # Check if file exists and act according to `force` parameter
         if not os.path.exists(filename) or force:
-            save_to_json(dict(common_words), filename)
+            utils.save_to_json(dict(common_words), filename)
         else:
             print(f"  As function argument 'force'={force}, not overwriting existig: {filename}")
             
