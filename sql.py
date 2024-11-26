@@ -33,7 +33,7 @@ def create(reset=False):
             query TEXT NOT NULL,
             type TEXT NOT NULL,
             lan TEXT NOT NULL,
-            unhandled BOOLEAN DEFAULT 1
+            handled BOOLEAN DEFAULT 0
         )
         ''')
         # Create the urls table
@@ -46,7 +46,7 @@ def create(reset=False):
             url_hash TEXT NOT NULL,
             file_hash TEXT,
             doc_type TEXT,
-            unhandled BOOLEAN DEFAULT 1,
+            handled BOOLEAN DEFAULT 0,
             full_lan TEXT,
             paragraph_lan INTEGER DEFAULT 0,
             confidence INTEGER,
@@ -74,25 +74,30 @@ def insert_url(query_id, type, url, doc_type=""):
 
 def get_all_queries(lan, unhandled=None):
     """Retrieve all queries from the queries table."""
+
+    handled = not unhandled
     with get_cursor() as cursor:
         if unhandled is None:
             cursor.execute("SELECT * FROM queries WHERE lan=?", (lan,))
             return cursor.fetchall()
         else:
             cursor.execute(
-                "SELECT * FROM queries WHERE lan=? AND unhandled=?", (lan, unhandled,))
+                "SELECT * FROM queries WHERE lan=? AND handled=?", (lan, handled,))
             return cursor.fetchall()
 
 
 def get_all_urls(unhandled=None):
     """Retrieve all URLs from the urls table."""
+
+    handled = not unhandled
+    
     with get_cursor() as cursor:
         if unhandled is None:
             cursor.execute("SELECT * FROM urls")
             return cursor.fetchall()
         else:
             cursor.execute(
-                "SELECT * FROM urls WHERE unhandled=?", (unhandled,))
+                "SELECT * FROM urls WHERE handled=?", (handled,))
             return cursor.fetchall()
 
         
@@ -111,12 +116,12 @@ def insert_query_if_not_exists(query, type, lan):
         return True
     return False
 
-def save_bing_url(url_id, final_url):
+def save_bing_url(url_id, final_url): # **** XXXX Changed, but not sure why this function exists
     """Insert a URL into the urls table if it doesn't already exist."""
     with get_cursor() as cursor:
         cursor.execute("""
             UPDATE urls
-            SET url=?, unhandled=True
+            SET url=?, handled=False
             WHERE id=?
         """, (final_url, url_id))
 
@@ -128,8 +133,8 @@ def insert_url_if_not_exists(query_id, type, url, doc_type=""):
             "SELECT EXISTS(SELECT 1 FROM urls WHERE url_hash=?)", (url_hash,))
         if not bool(cursor.fetchone()[0]):
             cursor.execute("""
-                INSERT INTO urls (query_id, type, url, url_hash, doc_type, unhandled)
-                VALUES (?, ?, ?, ?, ?, 1)
+                INSERT INTO urls (query_id, type, url, url_hash, doc_type, handled)
+                VALUES (?, ?, ?, ?, ?, 0)
             """, (query_id, type, url, url_hash, doc_type))
             return True
     return False
@@ -143,7 +148,7 @@ def get_url_by_id(id):
 def get_url_file_hash(url_id, file_hash):
     """Retrieve a URL from the urls table by its File Hash."""
     with get_cursor() as cursor:
-        cursor.execute("SELECT * FROM urls WHERE id!=? AND file_hash=? AND unhandled=False LIMIT 1", (url_id, file_hash,))
+        cursor.execute("SELECT * FROM urls WHERE id!=? AND file_hash=? AND handled=True LIMIT 1", (url_id, file_hash,))
         return cursor.fetchone()
 
 def update_url_by_id(id, file_hash, doc_type, full_lan, paragraph_lan):
@@ -151,15 +156,15 @@ def update_url_by_id(id, file_hash, doc_type, full_lan, paragraph_lan):
     with get_cursor() as cursor:
         cursor.execute("""
             UPDATE urls
-            SET file_hash=?, doc_type=?, full_lan=?, paragraph_lan=?, unhandled=0
+            SET file_hash=?, doc_type=?, full_lan=?, paragraph_lan=?, handled=1
             WHERE id=?
         """, (file_hash, doc_type, full_lan, paragraph_lan, id))
 
-def update_query_unhandled_by_id(id):
-    """Updates the unhandled value to false for a given query ID in the queries table."""
+def update_query_handled_by_id(id):
+    """Updates the handled value to true for a given query ID in the queries table."""
     with get_cursor() as cursor:
         cursor.execute(
-            "UPDATE queries SET unhandled=? WHERE id=?", (False, id))
+            "UPDATE queries SET handled=? WHERE id=?", (True, id))
 
 def urls_exist(url_hashes, type):
     """Check if URLs with given hashes and type already exist in the database."""
@@ -184,7 +189,7 @@ def insert_urls_many(url_data):
         return
     with get_cursor() as cursor:
         cursor.executemany("""
-            INSERT INTO urls (query_id, type, url, url_hash, unhandled)
+            INSERT INTO urls (query_id, type, url, url_hash, handled)
             VALUES (?, ?, ?, ?, ?)
         """, filtered_data)
 
@@ -193,7 +198,7 @@ def set_query_as_handled(query_id):
     with get_cursor() as cursor:
         cursor.execute("""
             UPDATE queries
-            SET unhandled = False
+            SET handled = True
             WHERE id = ?
         """, (query_id,))
 
@@ -202,7 +207,7 @@ def set_url_as_handled(url_id):
     with get_cursor() as cursor:
         cursor.execute("""
             UPDATE urls
-            SET unhandled = False
+            SET handled = True
             WHERE id = ?
         """, (url_id,))
 
@@ -211,7 +216,7 @@ def update_url(url_id, file_hash, doc_type, full_lan, confidence, paragraph_lan)
     with get_cursor() as cursor:
         cursor.execute("""
             UPDATE urls
-            SET unhandled = False,
+            SET handled = True,
                 file_hash  = ?,
                 doc_type  = ?,
                 full_lan  = ?,
@@ -225,7 +230,7 @@ def set_all_queries_unhandled():
     with get_cursor() as cursor:
         cursor.execute("""
             UPDATE queries
-            SET unhandled = True
+            SET handled = False
         """)
 
 def set_all_urls_unhandled():
@@ -233,7 +238,7 @@ def set_all_urls_unhandled():
     with get_cursor() as cursor:
         cursor.execute("""
             UPDATE urls
-            SET unhandled = False
+            SET handled = False
         """)
 
 def get_most_common_urls():
@@ -302,14 +307,14 @@ def count_urls_per_query_type():
 def count_handled_unhandled_queries():
     with get_cursor() as cursor:
         cursor.execute("""
-            SELECT unhandled, COUNT(*) as count
+            SELECT handled, COUNT(*) as count
             FROM queries
-            GROUP BY unhandled
+            GROUP BY handled
         """)
         results = cursor.fetchall()
         output = {"unhandled": 0, "handled": 0}
         for result in results:
-            key = "handled" if result[0] == 0 else "unhandled"
+            key = "unhandled" if result[0] == 0 else "handled"
             output[key] = result[1]
         return output
 
@@ -537,7 +542,7 @@ def get_url_counts_by_query_id(lan, query_id):
         total_count = cursor.fetchone()[0]
         # Total unhandled URLs count
         cursor.execute(
-            "SELECT COUNT(*) FROM urls WHERE query_id=? AND unhandled=?", (query_id, True))
+            "SELECT COUNT(*) FROM urls WHERE query_id=? AND handled=?", (query_id, False))
         unhandled_count = cursor.fetchone()[0]
         # Total URLs with non-null full_lan
         cursor.execute(
@@ -561,7 +566,7 @@ def get_url_counts_by_type(lan, search_type):
         cursor.execute("""
             SELECT 
                 COUNT(*) as total_count,
-                SUM(CASE WHEN u.unhandled = 1 THEN 1 ELSE 0 END) as unhandled_count,
+                SUM(CASE WHEN u.handled = 0 THEN 1 ELSE 0 END) as unhandled_count,
                 SUM(CASE WHEN u.full_lan = ? THEN 1 ELSE 0 END) as full_lan_count
             FROM queries q
             JOIN urls u on q.id = u.query_id

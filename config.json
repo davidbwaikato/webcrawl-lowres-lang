@@ -40,6 +40,10 @@
 	"www.google.com",
 	"google.com"
     ],
+
+    "nlp" : {
+	"min_para_word_len": 100
+    },
     
     "languages": {
 	"Hawaiian": {

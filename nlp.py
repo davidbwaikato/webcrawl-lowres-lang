@@ -29,9 +29,9 @@ import globals
 # # Add the component to the pipeline
 # nlp.add_pipe("language_detector")
 
-def clean_text(text):
+def clean_text(text,reg_expr=r'\n{3,}',replace_str='\n\n'):
     # Replace instances where there are more than two consecutive newlines with just two.
-    cleaned_text = re.sub(r'\n{3,}', '\n\n', text)
+    cleaned_text = re.sub(reg_expr, replace_str, text)
     return cleaned_text
 
 def extract_text_from_file(filepath, doc_type):
@@ -52,6 +52,35 @@ def extract_text_from_file(filepath, doc_type):
     else:
         print(f"Unsupported doc_type: {doc_type}")
         return None
+
+def convert_text_to_parachunks(text):
+    """Gets optimal sized chunks to run paragraph language detection for"""
+
+    if (globals.verbose > 1):
+        verbose_char_len = globals.verbose*100
+        print(f"---- process_text_in_chunks() text[:{verbose_char_len}]----")
+        print(text[:verbose_char_len])
+        print("----")
+
+    cleaned_text = clean_text(text, r'\n{2,}','\n')    
+    paras = cleaned_text.splitlines()
+
+    min_para_word_len = globals.config['nlp']['min_para_word_len']
+
+    para_chunks = []
+    
+    para_cat = ""
+
+    for para in paras:
+        para_cat = para_cat + para + '\n'
+        para_cat_words = para_cat.split()
+        if (len(para_cat_words) > min_para_word_len):
+            # enough concatenated words to process
+            para_cat = para_cat.strip()            
+            para_chunks.append(para_cat)
+            para_cat = ""
+            
+    return para_chunks
 
 # def detect_language_spacy(text):
 #     doc = nlp(text)
@@ -88,7 +117,7 @@ def extract_text_from_file(filepath, doc_type):
 #         print("Error detecting language with langdetect")
 #         return None
 
-def process_text_in_chunks(text, detect:Language):
+def process_text_in_chunksDEPRECATED(text, detect:Language):
     """Gets an optimal chunk size to run paragraph language detection for"""
 
     if (globals.verbose > 1):
@@ -101,15 +130,15 @@ def process_text_in_chunks(text, detect:Language):
 
     short_text_threshold = 50
     medium_text_threshold = 200
-    size = 500
+    chunk_size = 500
 
     if num_words <= short_text_threshold:
-        size = 50
+        chunk_size = 50
     elif num_words <= medium_text_threshold:
-        size = 200
+        chunk_size = 200
         
     # Split the text into chunks
-    paragraphs = [text[i:i + size] for i in range(0, len(text), size)]
+    paragraphs = [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
 
     # Process each chunk and count paragraphs
     total = len(paragraphs)
@@ -123,25 +152,63 @@ def process_text_in_chunks(text, detect:Language):
     percentage = (count / total) * 100 if total > 0 else 0
     return percentage
 
-def detect_language_lingua(text,  detect:Language, paragraphs=True):
+
+def detect_para_language_lingua(text, detect_name:Language):
+    """Working with (potetially contatenated paragraphs to reach config set min word count) run language detection on paragraphs"""
+
+    para_chunks = convert_text_to_parachunks(text)
+    
+    # Process each chunk and count paragraphs
+    num_para_chunks = len(para_chunks)
+    lang_match_count = 0
+
+    #print(f"++++")
+    
+    for para_chunk in para_chunks:
+        language = detector.detect_language_of(para_chunk)
+        confidence = detector.compute_language_confidence(para_chunk, language)
+
+        if (globals.verbose > 2):
+            print(f"    Para chunk:\n--\n{para_chunk}\n--")
+        if (globals.verbose > 1):
+            print(f"    Para chunk Predicted language = {language} (confidence={confidence}\n")
+    
+        if language.name == detect_name:
+            lang_match_count += 1
+
+    #print(f"++++")            
+    print(f"  Para Chunks: lang_match_count={lang_match_count} out of {num_para_chunks}")
+    #print(f"++++")
+    
+    return lang_match_count, num_para_chunks 
+
+
+
+def detect_language_lingua(text,  detect_name:Language, paragraphs=True):
     """Detect language with confidence level using Lingua.py"""
+
     language = detector.detect_language_of(text)
     confidence = detector.compute_language_confidence(text, language)
+
     percentage = 0
     if paragraphs:
-        percentage = process_text_in_chunks(text, detect)
+        lang_match_count,num_para_chunks = detect_para_language_lingua(text,detect_name)
+        percentage = (lang_match_count / num_para_chunks) * 100 if num_para_chunks > 0 else 0
+      
     name = None
     if language != None:
         name = language.name
+
     return {
         "lang": name,
-        "condifence": round(confidence, 2),
+        "confidence": round(confidence, 2),
         "percentage": round(percentage, 2),
     }
 
-def run_nlp_algorithms(text, detect:Language):
-    """Detect language of the text using multiple methods."""
-    lingua = detect_language_lingua(text, detect)
+def run_nlp_algorithms(text, detect_name:Language):
+    """Detect language of the text using (for now) lingua method."""
+    lingua = detect_language_lingua(text, detect_name)
+    
     return {
         "lingua": lingua,
     }

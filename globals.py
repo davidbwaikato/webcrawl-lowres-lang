@@ -5,5 +5,10 @@ config = None
 # Stores the result of processing the command-line arguments
 args   = None
 
-# Provides a handier version of the command-line argument -v/--verbose to access
+# Provides a handier versions of certain command-line arguments to access
+
+# -l/--lang
+lang    = None
+
+# -v/--verbose
 verbose = 1

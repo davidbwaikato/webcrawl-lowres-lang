@@ -1,20 +1,66 @@
 
+* config params for chunking text for NLP
 
-2. Have config option for loading in English full dict and removing any matches
+* 2nd phase get frequency dict
 
-3. Have config option for remove all matches that occur between the different UDHRs?
+* PDF text extract looks to be struggling with macrons
 
-4. Fix up defaults, so they are the values in config!
+* Remove hardwirded Language.MAORI
 
-5. for simple HTML download, use BS4 to fix up to be UTF8 when downloaded (leave charset for now, or change to orig-charset???)
+* Have config option for loading in English full dict and removing any matches
+* Have config option for remove all matches that occur between the different UDHRs?
 
-6. config params for chunking text for NLP
+* for simple HTML download, use BS4 to fix up to be UTF8 when downloaded (leave charset for now, or change to orig-charset???)
 
-7. 2nd phase get frequency dict
 
-8. Support of other NLP lang id tools (e.g. FastText)
 
-9. Remove hardwirded Language.MAORI
+* Implement bing_api
+
+* Support of other NLP lang id tools (e.g. FastText)
+
+
+=====
+
+Para chunk:
+Ono ki te Waru  
+Phrases to use between  
+Six and Eight
+Nā Jim Nicholls ~ Kaikohikohi Kupu
+Published by the  
+Hauraki Mäori Trust Board  
+41 Belmont Street, PaeroaCollector of the Information — Jim Nicholls 
+Editors — Sophie Tukukino/Hariru Roa
+Design — A2Z Design
+Cover Illustration — Rebecca Cundy
+Printers — Waikato Print
+  => predicted language = Language.MAORI
+
+Para chunk:
+Language Corpus — Te Haumarangai Conner
+Publishers — Waikato Print
+Copyright © 2009 Hauraki Mäori Trust Board
+This 2009 edition is a Hauraki Mäori Trust Board and a Waikato Print Publication.
+Hauraki M äori Trust Board, 41 Belmont Road, Paeroa
+ISBN: 978-0-9-958200-07iIntroduction
+‘He nui ngä kai kei runga i a Moehau
+  => predicted language = Language.MAORI
+
+Para chunk:
+me he tangata koe whai mai’
+(There is an abundance of food on Moehau  
+if you are a person who is prepared to seek it)
+The purpose of this booklet is to provide a list of phrases used in Hauraki. It 
+has been placed in this format because it is intended for a specific audience,
+  => predicted language = Language.ENGLISH
+
+Para chunk:
+one that might want to use these phrases on a daily basis. 
+Some words and phrases are not uniquely Hauraki because over a period 
+of time words and phrases from outside Hauraki have been incorporated into 
+the Hauraki vernacular. What our kuia and koroua have indicated is that the 
+words and phrases included in this document have been used by them or
+  => predicted language = Language.ENGLISH
+
 
 
 ==

@@ -9,6 +9,7 @@ import requests
 import shutil
 import threading
 import time
+import traceback
 
 from fake_useragent import UserAgent
 from selenium import webdriver
@@ -47,9 +48,12 @@ stop_event = threading.Event()
 
 def get_args():
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description="Arguments that can be used")
-    parser.add_argument("-l", "--lang", default=Language.MAORI.name,
-                        help=f"language used for generating queries [Default={Language.MAORI.name}]")
+    parser = argparse.ArgumentParser(
+        prog="lrl-carwler.py",
+        description="Focused web crawler for dowloading pages in low-resourced languages"
+    )
+    #parser.add_argument("lang", default=Language.MAORI.name,
+    #                    help=f"language used for generating queries [Default={Language.MAORI.name}]")
     parser.add_argument("-v", "--verbose", type=int,
                         default=1, help=f"level of verbosity used for output [Default=1]")
 
@@ -73,12 +77,12 @@ def get_args():
     parser.add_argument("-np", "--num_pages", type=int, default=globals.config['num_pages'],
                         help=f"number of pages of search results to process (x 4, for each query type) [Config Default={globals.config['num_pages']}]")
 
-    parser.add_argument("-uh", "--handled", action="store_true",
-                        default=True, help="flag to get use handled queries or urls")
+    parser.add_argument("-uh", "--unhandled", action="store_true",
+                        default=False, help="flag to reprocess unhandled queries or urls")
 
     parser.add_argument("-a",  "--all", action="store_true",
                         default=False, help="flag to create queries, search and run NLP")
-    parser.add_argument("-oq", "--only_queries", action="store_true",
+    parser.add_argument("-oq", "--only_querygen", action="store_true",
                         default=False, help="flag to only create queries")
     parser.add_argument("-os", "--only_search", action="store_true",
                         default=False, help="flag to only search queries")
@@ -88,12 +92,15 @@ def get_args():
     parser.add_argument("-d",  "--display_stats", action="store_true",
                         default=False, help="flag to show details")
 
-    parser.add_argument("-sau", "--set_queries_unhandled", action="store_true",
+    parser.add_argument("-squ", "--set_queries_unhandled", action="store_true",
                         default=False, help="Flag to set all queries as unhandled")
     parser.add_argument("-cu", "--clean_urls", action="store_true",
                         default=False, help="Testing flag")
     parser.add_argument("-test", "--test", action="store_true",
                         default=False, help="Testing flag")
+
+    parser.add_argument("lang",
+                        help=f"language used for generating queries")
     
     return parser.parse_args()
 
@@ -306,8 +313,8 @@ def search_and_fetch(query, search_engine_type, num_pages=1, **kwargs):
     urls = utils.remove_blacklisted(urls, globals.config['blacklist'])
     if len(urls) == 0:
         return
-    # Prepare the URL data for insertion
-    url_data = [(query_id, engine, url, utils.hash_url(url), True) for url in urls]
+    # Prepare the URL data for insertion => not currently downloaded, so url handle=False
+    url_data = [(query_id, engine, url, utils.hash_url(url), False) for url in urls]
     # Insert URLs into the database (only the new ones)
     # print(url_data)
     sql.insert_urls_many(url_data)
@@ -329,7 +336,7 @@ def search_worker(sub_queries, search_engine_type, num_pages, tcount):
 
 def nlp_worker(sub_urls, download_with_selenium,apply_robots_txt,  detect:Language, tcount):
     for url in sub_urls:
-        if url[7] == 0:
+        if url[7] == 1: # already handled it
             #print("{0}".format(url))
             #print("{0} {1}".format(url[0], url[7]))
             continue
@@ -362,7 +369,7 @@ def nlp_worker(sub_urls, download_with_selenium,apply_robots_txt,  detect:Langua
                 delete_file(result["path"])                                
                 continue            
 
-            langs = nlp.run_nlp_algorithms(cleaned_extracted_text, Language.MAORI.name) # **** XXXX
+            langs = nlp.run_nlp_algorithms(cleaned_extracted_text, globals.lang_uc) # **** XXXX
             if langs["lingua"]["lang"] == None:
                 sql.set_url_as_handled(url[0])
                 print(f"Thread {tcount} xxxxxxxxxxxx deleting (NLP failed to detect language) xxxxxxxxxxxx")
@@ -372,7 +379,7 @@ def nlp_worker(sub_urls, download_with_selenium,apply_robots_txt,  detect:Langua
                 print(f"Thread {tcount} xxxxxxxxxxxx deleting (detected {langs['lingua']['lang'].capitalize()} != {detect.name.capitalize()}) xxxxxxxxxxxx")
                 delete_file(result["path"])
                 
-            sql.update_url(url[0], result["hash"], result["doc_type"], langs["lingua"]["lang"], langs["lingua"]["condifence"], langs["lingua"]["percentage"])
+            sql.update_url(url[0], result["hash"], result["doc_type"], langs["lingua"]["lang"], langs["lingua"]["confidence"], langs["lingua"]["percentage"])
             # print("{0} {1} {2} HANDLED".format(tcount, url[0], @ now.strftime('%H:%M:%S')))
 
         except FileNotFoundError as e:
@@ -382,12 +389,14 @@ def nlp_worker(sub_urls, download_with_selenium,apply_robots_txt,  detect:Langua
         except Exception as e:
             sql.set_url_as_handled(url[0])
             print(f"Thread {tcount} Error in NLP: {e}")
+            if (globals.verbose > 2):
+                print(traceback.format_exc())
         
 def validate_args(args):
     try:
         # Validate lang
-        valid_langs = [Language.MAORI.name]
-        if globals.args.lang and globals.args.lang not in valid_langs:
+        valid_langs = [Language.MAORI.name] # **** XXXX
+        if globals.lang_uc not in valid_langs:
             raise ValueError(f"Invalid language provided. Valid languages are: {valid_langs}")
         
         # Validate word_count, query_count, num_threads, num_pages
@@ -406,8 +415,8 @@ def validate_args(args):
         print(e)
         exit(0)
 
-def display_stats(lang):
-    print(f"--- Query Statistics for Language: {lang} ---\n")
+def display_stats(lang_uc):
+    print(f"--- Query Statistics for Language: {lang_uc} ---\n")
 
     # Print total Queries with their types
     print("--- Query Counts by Type ---")
@@ -417,6 +426,7 @@ def display_stats(lang):
     print("\n")
 
     # Print Handled and Unhandled Queries
+    # **** XXXX
     handled_unhandled = sql.count_handled_unhandled_queries()
     print("--- Handled & Unhandled Queries ---")
     print(f"Handled Queries: {handled_unhandled.get('handled', 0)}")
@@ -429,33 +439,33 @@ def display_stats(lang):
 
     # Show count of query types by total URLs found, and total for given lang
     print("--- Query Types by Total URLs and URLs with Given Language ---")
-    query_types_by_total_urls = sql.count_query_types_by_total_urls(lang)
+    query_types_by_total_urls = sql.count_query_types_by_total_urls(lang_uc)
     for query_info in query_types_by_total_urls:
-        print(f"Query Type: {query_info['type']}, Total URL Count: {query_info['total_url_count']}, Total URL with {lang} Count: {query_info['total_url_with_lan_count']}\n")
+        print(f"Query Type: {query_info['type']}, Total URL Count: {query_info['total_url_count']}, Total URL with {lang_uc} Count: {query_info['total_url_with_lan_count']}\n")
 
     # Print top queries with most, least and language URLs
     print("--- Top Queries ---")
-    top_queries_most_urls = sql.get_top_queries_with_most_urls(lang)
+    top_queries_most_urls = sql.get_top_queries_with_most_urls(lang_uc)
     print("--- Top Queries with Most URLs ---")
     for query_info in top_queries_most_urls[:5]:
-        print(f"Index: {query_info['index']}, Query: {query_info['query']}, Type: {query_info['type']}, URL Count: {query_info['total_url_count']}, {lang} URL Count: {query_info['lan_url_count']}")
+        print(f"Index: {query_info['index']}, Query: {query_info['query']}, Type: {query_info['type']}, URL Count: {query_info['total_url_count']}, {lang_uc} URL Count: {query_info['lan_url_count']}")
 
     print("\n--- Top Queries with Least URLs ---")
     for query_info in top_queries_most_urls[-5:]:
-        print(f"Index: {query_info['index']}, Query: {query_info['query']}, Type: {query_info['type']}, URL Count: {query_info['total_url_count']}, {lang} URL Count: {query_info['lan_url_count']}")
+        print(f"Index: {query_info['index']}, Query: {query_info['query']}, Type: {query_info['type']}, URL Count: {query_info['total_url_count']}, {lang_uc} URL Count: {query_info['lan_url_count']}")
     
     top_queries_most_urls.sort(key=lambda x: x['lan_url_count'], reverse=True)
     print("\n--- Top 5 Queries by Maori URLs ---")
     for query_info in top_queries_most_urls[:5]:
-        print(f"Index: {query_info['index']}, Query: {query_info['query']}, Type: {query_info['type']}, URL Count: {query_info['total_url_count']}, {lang} URL Count: {query_info['lan_url_count']}")
+        print(f"Index: {query_info['index']}, Query: {query_info['query']}, Type: {query_info['type']}, URL Count: {query_info['total_url_count']}, {lang_uc} URL Count: {query_info['lan_url_count']}")
     print("\n")
 
 
     # Print the top queries with the most URLs for the specified language
-    doc_type_counts_for_language = sql.count_doc_types_for_language_total(lang)
-    print(f"--- Document Type Counts (Total and in {lang}) ---")
+    doc_type_counts_for_language = sql.count_doc_types_for_language_total(lang_uc)
+    print(f"--- Document Type Counts (Total and in {lang_uc}) ---")
     for doc_info in doc_type_counts_for_language:
-        print(f"Document Type: {doc_info['doc_type']}, Total Count: {doc_info['total_count']}, {lang} Count: {doc_info['language_count']}")
+        print(f"Document Type: {doc_info['doc_type']}, Total Count: {doc_info['total_count']}, {lang_uc} Count: {doc_info['language_count']}")
     print("\n")
 
     # Print duplicate URL hashes and File Hashes
@@ -474,7 +484,7 @@ def display_stats(lang):
             print(f"Hash: {file_hash}, Count: {count}")
     print("\n")
 
-    domain_results = sql.get_domain_counts(lang)
+    domain_results = sql.get_domain_counts(lang_uc)
     # Sort the domains by total URLs and get the top and bottom 10
     sorted_domains = sorted(domain_results['domains'].items(), key=lambda x: x[1], reverse=True)
     top_10_domains = sorted_domains[:10]
@@ -492,9 +502,9 @@ def display_stats(lang):
     sorted_language_domains = sorted(domain_results['language_domains'].items(), key=lambda x: x[1], reverse=True)
     top_10_language_domains = sorted_language_domains[:10]
     bottom_10_language_domains = sorted_language_domains[-10:]
-    print(f"\n--- Top 10 Domains by {lang} URLs ---")
+    print(f"\n--- Top 10 Domains by {lang_uc} URLs ---")
     for domain, count in top_10_language_domains:
-        print(f"Domain: {domain}, {lang} URLs: {count}")
+        print(f"Domain: {domain}, {lang_uc} URLs: {count}")
     print(f"\n--- Bottom 10 Domains by Total URLs ---")
     for domain, count in bottom_10_language_domains:
         print(f"Domain: {domain}, Total URLs: {count}")
@@ -503,25 +513,25 @@ def display_stats(lang):
     # Confidence and Paragraph Analysis
     print("--- Confidence and Paragraph Analysis ---")
     print("--- URLs with Low Confidence ---")
-    low_confidence = sql.count_low_confidence_urls(lang)
+    low_confidence = sql.count_low_confidence_urls(lang_uc)
     print(f"Total URLs with Low Confidence: {low_confidence.get('total_low_confidence', 0)}")
     print("Top 5 Lowest Confidence URLs:")
     for url_info in low_confidence.get('top_5_lowest_confidence', []):
         print(f"URL: {url_info[0]}, Confidence: {url_info[1]}")
     print("\n--- URLs with High Confidence ---")
-    high_confidence = sql.count_high_confidence_urls(lang)
+    high_confidence = sql.count_high_confidence_urls(lang_uc)
     print(f"Total URLs with High Confidence: {high_confidence.get('total_high_confidence', 0)}")
     print("Top 5 Highest Confidence URLs:")
     for url_info in high_confidence.get('top_5_highest_confidence', []):
         print(f"URL: {url_info[0]}, Confidence: {url_info[1]}")
     print("\n--- URLs with Low Paragraph Percentage and Low Confidence ---")
-    low_para_low_conf = sql.count_low_para_percent_low_confidence_urls(lang)
+    low_para_low_conf = sql.count_low_para_percent_low_confidence_urls(lang_uc)
     print(f"Total: {low_para_low_conf.get('total_low_para_percent_low_confidence', 0)}")
     print("Top 5 Lowest Paragraph Percentage and Low Confidence URLs:")
     for url_info in low_para_low_conf.get('top_5_lowest_para_percent_low_confidence', []):
         print(f"URL: {url_info[0]}, Paragraph Percentage: {url_info[1]}, Confidence: {url_info[2]}")
     print("\n--- URLs with High Paragraph Percentage and High Confidence ---")
-    high_para_high_conf = sql.count_high_para_percent_high_confidence_urls(lang)
+    high_para_high_conf = sql.count_high_para_percent_high_confidence_urls(lang_uc)
     print(f"Total: {high_para_high_conf.get('total_high_para_percent_high_confidence', 0)}")
     print("Top 5 Highest Paragraph Percentage and High Confidence URLs:")
     for url_info in high_para_high_conf.get('top_5_highest_para_percent_high_confidence', []):
@@ -529,7 +539,7 @@ def display_stats(lang):
     print("\n")
     # Confidence Ranges
     print("Confidence Ranges")
-    range_results = sql.count_urls_by_confidence_and_paragraph_percentage_ranges(lang)
+    range_results = sql.count_urls_by_confidence_and_paragraph_percentage_ranges(lang_uc)
     print("--- URL Counts by Confidence Range ---")
     for range, count in range_results['confidence'].items():
         print(f"Confidence Range {range}: {count} URLs")
@@ -541,11 +551,11 @@ def display_stats(lang):
 
     # Search Types Statistics
     print("--- Search Type Statistics ---")
-    queries = sql.get_all_queries(lang)
-    g_urls = sql.get_url_counts_by_type(lang, const.GOOGLE)
-    ga_urls = sql.get_url_counts_by_type(lang, const.GOOGLE_API)
-    b_urls = sql.get_url_counts_by_type(lang, const.BING)
-    ba_urls = sql.get_url_counts_by_type(lang, const.BING_API)
+    queries = sql.get_all_queries(lang_uc)
+    g_urls = sql.get_url_counts_by_type(lang_uc, const.GOOGLE)
+    ga_urls = sql.get_url_counts_by_type(lang_uc, const.GOOGLE_API)
+    b_urls = sql.get_url_counts_by_type(lang_uc, const.BING)
+    ba_urls = sql.get_url_counts_by_type(lang_uc, const.BING_API)
     total = g_urls["total_count"] + ga_urls["total_count"] + \
         b_urls["total_count"] + ba_urls["total_count"]
     lan_total = g_urls["lan_count"] + ga_urls["lan_count"] + \
@@ -553,23 +563,23 @@ def display_stats(lang):
     print(f"--- Google ---")
     print("Total Urls:", g_urls["total_count"])
     print("Unhandled Urls:", g_urls["unhandled_count"])
-    print(f"{lang} Urls:", g_urls["lan_count"])
+    print(f"{lang_uc} Urls:", g_urls["lan_count"])
     print("\n--- Google API ---")
     print("Total Urls:", ga_urls["total_count"])
     print("Unhandled Urls:", ga_urls["unhandled_count"])
-    print(f"{lang} Urls:", ga_urls["lan_count"])
+    print(f"{lang_uc} Urls:", ga_urls["lan_count"])
     print("\n--- Bing ---")
     print("Total Urls:", b_urls["total_count"])
     print("Unhandled Urls:", b_urls["unhandled_count"])
-    print(f"{lang} Urls:", b_urls["lan_count"])
+    print(f"{lang_uc} Urls:", b_urls["lan_count"])
     print("\n--- Bing API ---")
     print("Total Urls:", ba_urls["total_count"])
     print("Unhandled Urls:", ba_urls["unhandled_count"])
-    print(f"{lang} Urls:", ba_urls["lan_count"])
-    print(f"\n--- Overall Total for {lang} ---")
+    print(f"{lang_uc} Urls:", ba_urls["lan_count"])
+    print(f"\n--- Overall Total for {lang_uc} ---")
     print("Total Queries:", len(queries))
     print("Total Urls:", total)
-    print(f"Total {lang} Urls:", lan_total)
+    print(f"Total {lang_uc} Urls:", lan_total)
     exit(0)
 
 def clean_urls(urls):
@@ -614,6 +624,14 @@ def test():
 if __name__ == "__main__":
     globals.config = utils.read_config()
     globals.args = get_args()
+
+    lang = globals.args.lang
+    lang_lc = lang.lower()
+    lang_uc = lang.upper()
+    
+    globals.lang    = lang
+    globals.lang_lc = lang_lc
+    globals.lang_uc = lang_uc
     
     globals.verbose = globals.args.verbose
     
@@ -631,15 +649,26 @@ if __name__ == "__main__":
     try:
 
         validate_args(globals.args)
+
+        # **** XXXX
+        # This shouldn't be a minus arg => always needed!
+        lang_uc          = globals.lang_uc
         
-        lang          = globals.args.lang
-        word_count    = globals.args.word_count    or globals.config.get('word_count')
-        query_count   = globals.args.query_count   or globals.config.get('query_count')
-        search_engine = globals.args.search_engine or globals.config.get('search_engine')
-        num_threads   = globals.args.num_threads   or globals.config.get('num_threads')
-        num_pages     = globals.args.num_pages     or globals.config.get('num_pages')
-        
-        handled = globals.args.handled
+        #word_count    = globals.args.word_count    or globals.config.get('word_count')
+        #query_count   = globals.args.query_count   or globals.config.get('query_count')
+        #search_engine = globals.args.search_engine or globals.config.get('search_engine')
+        #num_threads   = globals.args.num_threads   or globals.config.get('num_threads')
+        #num_pages     = globals.args.num_pages     or globals.config.get('num_pages')
+
+        # The following are now explicitly set to their config defaults if not give on CLI
+        word_count    = globals.args.word_count
+        query_count   = globals.args.query_count
+        search_engine = globals.args.search_engine
+        num_threads   = globals.args.num_threads
+        num_pages     = globals.args.num_pages
+
+        # Only controlable from the commandline
+        unhandled_flag = globals.args.unhandled
 
         # Ensure the downloads directory exists
         downloads_dir = globals.config.get('downloads_dir')
@@ -649,21 +678,21 @@ if __name__ == "__main__":
         # Create the database
         sql.create(reset=False)
         if globals.args.display_stats:
-            display_stats(lang)
+            display_stats(lang_uc)
             exit(0)
 #        # Get dictionary from UDHR PDFs
 #        if extract_dictionary:
 #            extractOrig(reset=False)
 
         # Queries
-        if globals.args.only_queries or globals.args.all:
-            print("Running Queries.")
-            queries = queries.generate_all(lang, word_count, query_count)
+        if globals.args.only_querygen or globals.args.all:
+            print("Generating Queries.")
+            queries = queries.generate_all(lang_uc, word_count, query_count)
         # Search
         if globals.args.only_search or globals.args.all:
             print("Running Search.")
             # Get all relevant queries from the database
-            queries = sql.get_all_queries(lang, handled)
+            queries = sql.get_all_queries(lang_uc, True) # **** XXXX Want to get all the unhandled ones
             # Split queries into sub-lists for each thread
             split_queries = [queries[i::num_threads]
                              for i in range(num_threads)]
@@ -684,6 +713,7 @@ if __name__ == "__main__":
                 if stop_event.is_set():
                     exit(0)
                 t.join()
+
             # Set query as handled
             print("Setting queries as handled.")
             for query in queries:
@@ -692,7 +722,7 @@ if __name__ == "__main__":
         # NLP
         if globals.args.only_nlp or globals.args.all:
             # Get all relevant queries from the database
-            urls = sql.get_all_urls(handled)
+            urls = sql.get_all_urls(True) # **** XXXX unhandled_flag ??
             print(f"Number of urls to be processed by NLP: {len(urls)}")
             # Split queries into sub-lists for each thread
             split_urls = [urls[i::num_threads]
@@ -704,7 +734,7 @@ if __name__ == "__main__":
             tcount = 1
             for sub_urls in split_urls:
                 t = threading.Thread(target=nlp_worker, args=(
-                    sub_urls, globals.args.download_with_selenium,globals.args.apply_robots_txt,  Language.MAORI, tcount))
+                    sub_urls, globals.args.download_with_selenium,globals.args.apply_robots_txt,  Language.MAORI, tcount)) # **** XXXX hard-wire MAORI, but passing object, note name!!!
                 threads.append(t)
                 t.start()
                 tcount += 1
@@ -713,12 +743,15 @@ if __name__ == "__main__":
                 if stop_event.is_set():
                     exit(0)
                 t.join()
+            # **** XXXX why is this block commented out???
             # Set query as handled
             # print("Setting urls as handled.")
             # for url in urls:
             #     set_url_as_handled(url[0])
             print("All Download+NLP-threads have finished.")
-        display_stats(lang)
+
+        if globals.args.all:
+            display_stats(lang_uc)
         
     except KeyboardInterrupt:
         print("Stopping all threads")
