@@ -24,7 +24,6 @@ from urllib.parse import urlparse, parse_qs
 from urllib.parse import urlparse
 from urllib.robotparser import RobotFileParser
 
-import sql
 
 # Import 'ssl' and disable default certificate verification for https URLs
 import ssl
@@ -35,10 +34,12 @@ ssl._create_default_https_context = ssl._create_unverified_context
 import const
 import globals
 
-import utils
+import display
 import nlp
 import queries
+import sql
 import search
+import utils
 
 
 stop_event = threading.Event()
@@ -80,24 +81,26 @@ def get_args():
     parser.add_argument("-uh", "--unhandled", action="store_true",
                         default=False, help="flag to reprocess unhandled queries or urls")
 
-    parser.add_argument("-a",  "--all", action="store_true",
-                        default=False, help="flag to create queries, search and run NLP")
-    parser.add_argument("-oq", "--only_querygen", action="store_true",
-                        default=False, help="flag to only create queries")
-    parser.add_argument("-os", "--only_search", action="store_true",
-                        default=False, help="flag to only search queries")
-    parser.add_argument("-on", "--only_nlp", action="store_true",
-                        default=False, help="flag to only run NLP on URLs")
+    parser.add_argument("-ra", "--run_all", action="store_true",
+                        default=False, help="flag to run all stages: query generation, perform web searches, download result sets, and run NLP over the downloaded files")
+    parser.add_argument("-rqg", "--run_querygen", action="store_true",
+                        default=False, help="flag to run the create query stage")
+    parser.add_argument("-rs", "--run_search", action="store_true",
+                        default=False, help="flag to run the search queries stage")
+    parser.add_argument("-rd", "--run_download", action="store_true",
+                        default=False, help="flag to run the download stage")
+    parser.add_argument("-rn", "--run_nlp", action="store_true",
+                        default=False, help="flag to run the NLP stage on the downloaded pages")
 
-    parser.add_argument("-d",  "--display_stats", action="store_true",
+    parser.add_argument("-ds", "--display_stats", action="store_true",
                         default=False, help="flag to show details")
 
     parser.add_argument("-squ", "--set_queries_unhandled", action="store_true",
                         default=False, help="Flag to set all queries as unhandled")
-    parser.add_argument("-cu", "--clean_urls", action="store_true",
-                        default=False, help="Testing flag")
-    parser.add_argument("-test", "--test", action="store_true",
-                        default=False, help="Testing flag")
+#    parser.add_argument("-cu", "--clean_urls", action="store_true",
+#                        default=False, help="Testing flag")
+#    parser.add_argument("-test", "--test", action="store_true",
+#                        default=False, help="Testing flag")
 
     parser.add_argument("lang",
                         help=f"language used for generating queries")
@@ -113,11 +116,28 @@ def delete_file(path):
     except Exception as e:
         print(f"Error deleting file: {e}")
 
-def set_values_from_existing(url_id, file_hash):
-    existing = sql.get_url_file_hash(url_id, file_hash)
-    if existing is None or existing[7] == 1:
+
+def set_nlp_values_from_existing(url_id, file_hash):
+    # Only interested in a previous 'file_hash' in the database if it has
+    # been nlp-handled (i.e. langinfo values computed)
+    existing = sql.get_url_duplicate_handled_file_hash(url_id, file_hash)
+
+    if existing is None:
         return 0
-    sql.update_url(url_id, file_hash, existing[6], existing[8], existing[10], existing[9])
+
+    # **** XXXX
+    # Clone across the values for 'doc_type', 'full_lan', 'confidence', 'paragraph_lan'
+    #sql.update_url(url_id, file_hash, existing[6], existing[9], existing[11], existing[10])
+
+    doc_type      = existing[6]
+    full_lan      = existing[9]
+    confidence    = existing[11]
+    paragraph_lan = existing[10]
+
+    # Clone the entry, based on the duplicate entry's values
+    update_url_fileinfo(url_id, file_hash, doc_type, downloaded=True)
+    update_url_langinfo(url_id, full_lan, confidence, paragraph_lan, handled=True)
+    
     return 1
 
 # Consider working with web-driver!!!
@@ -151,8 +171,14 @@ def init_driver(driver_name):
     
     return driver
 
+def get_download_filename(downloads_dir,filehash,doctype):
+    filename = filehash + "." + doctype
+    full_filename = os.path.join(downloads_dir, filename)
 
-def download_and_save(url_id, url, download_with_selenium,apply_robots_txt, save_dir='downloads', url_timeout=10):
+    return full_filename
+    
+
+def download_and_save(url_id, url, download_with_selenium,apply_robots_txt, save_dir, url_timeout=10):
 
     try:
         # Extract root domain from URL
@@ -185,15 +211,6 @@ def download_and_save(url_id, url, download_with_selenium,apply_robots_txt, save
             if not rp.can_fetch("*", url):
                 print(f"Crawling forbidden by robots.txt for URL: {url}")
                 return 0
-
-        # **** XXXX
-        # Ensure the save directory exists
-        #if not os.path.exists(save_dir):
-        #    os.makedirs(save_dir)
-
-        # Fetch the content with a timeout and allow redirects
-        #print(f"Away to get URL {url}")
-
         driver = None
         
         response = requests.get(url, verify=False, timeout=url_timeout, allow_redirects=True)
@@ -239,23 +256,16 @@ def download_and_save(url_id, url, download_with_selenium,apply_robots_txt, save
         sha256_hash.update(response_content)
         file_hash = sha256_hash.hexdigest()
 
-        filename = file_hash + "." + doc_type
-        filepath = os.path.join(save_dir, filename)
+        filepath = get_download_filename(save_dir,file_hash,doc_type)
 
-        # Save the content if the hash does not exist in the database
-        if os.path.exists(filepath):
-            # Try to search and assign database value first
-            if set_values_from_existing(url_id, file_hash) == 1:
-                return 1
-            print(f"File with hash {file_hash} already exists in downloads.")
-            return {"path": filepath, "hash": file_hash, "doc_type": doc_type}
-
-        #print("----")
-        #print(f"filepath = {filepath}")
-        #print(response_content[:100])
+        if not os.path.exists(filepath):
+                    
+            #print("----")
+            #print(f"filepath = {filepath}")
+            #print(response_content[:100])
         
-        with open(filepath, 'wb') as f:
-            f.write(response_content)
+            with open(filepath, 'wb') as f:
+                f.write(response_content)
             
         return {"path": filepath, "hash": file_hash, "doc_type": doc_type}
 
@@ -309,12 +319,16 @@ def search_and_fetch(query, search_engine_type, num_pages=1, **kwargs):
     # Quit the driver after the loop ends
     if driver:
         driver.quit()
+
     # Remove blacklisted URLs
     urls = utils.remove_blacklisted(urls, globals.config['blacklist'])
     if len(urls) == 0:
         return
-    # Prepare the URL data for insertion => not currently downloaded, so url handle=False
-    url_data = [(query_id, engine, url, utils.hash_url(url), False) for url in urls]
+
+    # Prepare the URL data for insertion
+    # => not currently downloaded, so url downloaded=False and (nlp) handle=False
+          
+    url_data = [(query_id, engine, url, utils.hash_url(url), False, False) for url in urls]
     # Insert URLs into the database (only the new ones)
     # print(url_data)
     sql.insert_urls_many(url_data)
@@ -334,60 +348,125 @@ def search_worker(sub_queries, search_engine_type, num_pages, tcount):
         print(f"  pausing for {randomized_sleep_delay} secs")
         time.sleep(randomized_sleep_delay)
 
-def nlp_worker(sub_urls, download_with_selenium,apply_robots_txt,  detect:Language, tcount):
+        
+def download_worker(sub_urls, download_with_selenium,apply_robots_txt, tcount):
     for url in sub_urls:
-        if url[7] == 1: # already handled it
+        url_id         = url[0]
+        url_href       = url[3]
+        url_downloaded = url[7]
+        #url_handled    = url[8]
+        
+        if url_downloaded == 1: # already downloaded
             #print("{0}".format(url))
             #print("{0} {1}".format(url[0], url[7]))
+            print(f"Thread {tcount}: Skipping as already downloaded URL {url_href}")
             continue
+        
         now = datetime.now()
-        print(f"Thread {tcount} ============ NLP Stage @ {now.strftime('%H:%M:%S')} ============ URL id {url[0]}")
+        print(f"Thread {tcount} ============ Download Stage @ {now.strftime('%H:%M:%S')} ============ URL id {url_id}")
         try:
             # Check if the stop event is set
             if stop_event.is_set():
                 return
-            result = download_and_save(url[0], url[3], download_with_selenium,apply_robots_txt,
+            result = download_and_save(url_id, url_href, download_with_selenium,apply_robots_txt,
                                        globals.config['downloads_dir'], globals.config['url_timeout'])
             if result == 1:
-                print(f"Thread {tcount} ============ ============ EXISTING URL id {url[0]}")
+                print(f"Thread {tcount} ============ ============ EXISTING URL id {url_id}")
                 continue
             if result == 0:
-                sql.set_url_as_handled(url[0])
+                sql.set_url_as_handled(url_id)
                 continue
 
-            extracted_text = nlp.extract_text_from_file(result["path"], result["doc_type"])
+            # If here, then result return is of the form
+            #   {"path": filepath, "hash": file_hash, "doc_type": doc_type}
+
+            # *** XXXX can be removed??  but if uncomment check args passed in as 'downloaded' now added
+            #sql.update_url(url[0], result["hash"], result["doc_type"], langs["lingua"]["lang"], langs["lingua"]["confidence"], langs["lingua"]["percentage"])
+            # print("{0} {1} {2} HANDLED".format(tcount, url[0], @ now.strftime('%H:%M:%S')))
+
+            url_filehash = result["hash"]
+            url_doctype  = result["doc_type"]
+            sql.update_url_fileinfo(url_id, url_filehash, url_doctype, downloaded=True) 
+            
+        except FileNotFoundError as e:
+            # print("{0} {1} {2} HANDLED".format(tcount, url[0], @ now.strftime('%H:%M:%S')))
+            sql.set_url_as_handled(url_id)
+            print(f"Thread {tcount} File not found")
+        except Exception as e:
+            sql.set_url_as_handled(url_id)
+            print(f"Thread {tcount} Error in NLP: {e}")
+            if (globals.verbose > 2):
+                print(traceback.format_exc())
+
+
+        
+def nlp_worker(sub_urls, detect_name:Language,save_dir, tcount):
+    for url in sub_urls:
+
+        url_id         = url[0]
+        url_href       = url[3]
+        url_filehash   = url[5]
+        url_doctype    = url[6]
+        #url_downloaded = url[7]
+        url_handled    = url[8]
+
+        if url_handled == 1: # already handled it
+            ##print("{0}".format(url))
+            ##print("{0} {1}".format(url[0], url[8]))
+            print(f"Thread {tcount}: Skipping as already NLP-processed (handled) URL {url_href}")
+            continue
+
+        url_filepath = get_download_filename(save_dir,url_filehash,url_doctype)
+                
+        now = datetime.now()
+        print(f"Thread {tcount} ============ NLP Stage @ {now.strftime('%H:%M:%S')} ============ URL id {url_id}")
+        try:
+            # Check if the stop event is set
+            if stop_event.is_set():
+                return
+
+            if set_nlp_values_from_existing(url_id, url_filehash) == 1:
+                # Found another entry in the database that:
+                #   (i) has the same file_hash but a differnt url_id, and
+                #  (ii) been nlp-handled
+                #
+                # As a result of calling this rountine, the existing NLP fields
+                # have been copied to the database entry for this url_id
+                return
+            
+            extracted_text = nlp.extract_text_from_file(url_filepath, url_doctype)
             if extracted_text == None:
-                sql.set_url_as_handled(url[0])
+                sql.set_url_as_handled(url_id)
                 print(f"Thread {tcount} xxxxxxxxxxxx deleting (no extracted text) xxxxxxxxxxxx")
-                delete_file(result["path"])                
+                delete_file(url_filepath)                
                 continue
             cleaned_extracted_text = nlp.clean_text(extracted_text)
             # Guard against the cleaned text now being nothing but 100% whitespace
             if cleaned_extracted_text.isspace():
-                sql.set_url_as_handled(url[0])
+                sql.set_url_as_handled(url_id)
                 print(f"Thread {tcount} xxxxxxxxxxxx deleting (text all whitespace) xxxxxxxxxxxx")
-                delete_file(result["path"])                                
+                delete_file(url_filepath)                                
                 continue            
 
-            langs = nlp.run_nlp_algorithms(cleaned_extracted_text, globals.lang_uc) # **** XXXX
+            langs = nlp.run_nlp_algorithms(cleaned_extracted_text, globals.lang_uc)
             if langs["lingua"]["lang"] == None:
-                sql.set_url_as_handled(url[0])
+                sql.set_url_as_handled(url_id)
                 print(f"Thread {tcount} xxxxxxxxxxxx deleting (NLP failed to detect language) xxxxxxxxxxxx")
-                delete_file(result["path"])                                
+                delete_file(url_filepath)                                
                 continue
-            if langs["lingua"]["lang"] != detect.name:
-                print(f"Thread {tcount} xxxxxxxxxxxx deleting (detected {langs['lingua']['lang'].capitalize()} != {detect.name.capitalize()}) xxxxxxxxxxxx")
-                delete_file(result["path"])
+            if langs["lingua"]["lang"] != detect_name:
+                print(f"Thread {tcount} xxxxxxxxxxxx deleting (detected {langs['lingua']['lang'].capitalize()} != {detect_name.capitalize()}) xxxxxxxxxxxx")
+                delete_file(url_filepath)
                 
-            sql.update_url(url[0], result["hash"], result["doc_type"], langs["lingua"]["lang"], langs["lingua"]["confidence"], langs["lingua"]["percentage"])
-            # print("{0} {1} {2} HANDLED".format(tcount, url[0], @ now.strftime('%H:%M:%S')))
+            sql.update_url_langinfo(url_id, langs["lingua"]["lang"], langs["lingua"]["confidence"], langs["lingua"]["percentage"])
+            # print("{0} {1} {2} HANDLED".format(tcount, url_id, @ now.strftime('%H:%M:%S')))
 
         except FileNotFoundError as e:
-            # print("{0} {1} {2} HANDLED".format(tcount, url[0], @ now.strftime('%H:%M:%S')))
-            sql.set_url_as_handled(url[0])
+            # print("{0} {1} {2} HANDLED".format(tcount, url_id, @ now.strftime('%H:%M:%S')))
+            sql.set_url_as_handled(url_id)
             print(f"Thread {tcount} File not found")
         except Exception as e:
-            sql.set_url_as_handled(url[0])
+            sql.set_url_as_handled(url_id)
             print(f"Thread {tcount} Error in NLP: {e}")
             if (globals.verbose > 2):
                 print(traceback.format_exc())
@@ -415,211 +494,45 @@ def validate_args(args):
         print(e)
         exit(0)
 
-def display_stats(lang_uc):
-    print(f"--- Query Statistics for Language: {lang_uc} ---\n")
 
-    # Print total Queries with their types
-    print("--- Query Counts by Type ---")
-    queryCount = sql.count_query_types()
-    for query, count in queryCount.items():
-        print(f"Type: {query}, Count: {count}")
-    print("\n")
+#def clean_urls(urls):
+#    for url in urls:
+#        if 'bing.com' in url[3]:
+#            query_params = parse_qs(urlparse(url[3]).query)
+#            if 'u' in query_params:
+#                encoded_url = query_params['u'][0]
+#                try:
+#                    temp = "{0}{1}".format(encoded_url[2:], "==")
+#                    final_url = base64.b64decode(temp).decode("utf-8")
+#                    print("Saving {0}".format(url[0]))
+#                    sql.save_bing_url(url[0], final_url)
+#                except Exception:
+#                    continue
 
-    # Print Handled and Unhandled Queries
-    # **** XXXX
-    handled_unhandled = sql.count_handled_unhandled_queries()
-    print("--- Handled & Unhandled Queries ---")
-    print(f"Handled Queries: {handled_unhandled.get('handled', 0)}")
-    print(f"Unhandled Queries: {handled_unhandled.get('unhandled', 0)}\n")
-
-    # Print Total Duplicate Queries
-    print("--- Total Duplicate Queries ---")
-    duplicate_queries = sql.count_duplicate_queries()
-    print(f"Total Duplicate Queries: {len(duplicate_queries)}\n")
-
-    # Show count of query types by total URLs found, and total for given lang
-    print("--- Query Types by Total URLs and URLs with Given Language ---")
-    query_types_by_total_urls = sql.count_query_types_by_total_urls(lang_uc)
-    for query_info in query_types_by_total_urls:
-        print(f"Query Type: {query_info['type']}, Total URL Count: {query_info['total_url_count']}, Total URL with {lang_uc} Count: {query_info['total_url_with_lan_count']}\n")
-
-    # Print top queries with most, least and language URLs
-    print("--- Top Queries ---")
-    top_queries_most_urls = sql.get_top_queries_with_most_urls(lang_uc)
-    print("--- Top Queries with Most URLs ---")
-    for query_info in top_queries_most_urls[:5]:
-        print(f"Index: {query_info['index']}, Query: {query_info['query']}, Type: {query_info['type']}, URL Count: {query_info['total_url_count']}, {lang_uc} URL Count: {query_info['lan_url_count']}")
-
-    print("\n--- Top Queries with Least URLs ---")
-    for query_info in top_queries_most_urls[-5:]:
-        print(f"Index: {query_info['index']}, Query: {query_info['query']}, Type: {query_info['type']}, URL Count: {query_info['total_url_count']}, {lang_uc} URL Count: {query_info['lan_url_count']}")
-    
-    top_queries_most_urls.sort(key=lambda x: x['lan_url_count'], reverse=True)
-    print("\n--- Top 5 Queries by Maori URLs ---")
-    for query_info in top_queries_most_urls[:5]:
-        print(f"Index: {query_info['index']}, Query: {query_info['query']}, Type: {query_info['type']}, URL Count: {query_info['total_url_count']}, {lang_uc} URL Count: {query_info['lan_url_count']}")
-    print("\n")
-
-
-    # Print the top queries with the most URLs for the specified language
-    doc_type_counts_for_language = sql.count_doc_types_for_language_total(lang_uc)
-    print(f"--- Document Type Counts (Total and in {lang_uc}) ---")
-    for doc_info in doc_type_counts_for_language:
-        print(f"Document Type: {doc_info['doc_type']}, Total Count: {doc_info['total_count']}, {lang_uc} Count: {doc_info['language_count']}")
-    print("\n")
-
-    # Print duplicate URL hashes and File Hashes
-    print("--- Duplicate Hash Statistics ---")
-    duplicate_url_hashes = sql.count_duplicate_url_hashes()
-    print(f"Total Duplicate URL Hashes: {duplicate_url_hashes.get('total_duplicate_hashes', 0)}")
-    print("Top 5 Duplicate URL Hashes:")
-    for hash_info in duplicate_url_hashes.get('top_duplicate_hashes', []):
-        for url_hash, count in hash_info.items():
-            print(f"Hash: {url_hash}, Count: {count}")
-    duplicate_file_hashes = sql.count_duplicate_file_hashes()
-    print(f"Total Duplicate File Hashes: {duplicate_file_hashes.get('total_duplicate_file_hashes', 0)}")
-    print("Top 5 Duplicate File Hashes:")
-    for hash_info in duplicate_file_hashes.get('top_duplicate_file_hashes', []):
-        for file_hash, count in hash_info.items():
-            print(f"Hash: {file_hash}, Count: {count}")
-    print("\n")
-
-    domain_results = sql.get_domain_counts(lang_uc)
-    # Sort the domains by total URLs and get the top and bottom 10
-    sorted_domains = sorted(domain_results['domains'].items(), key=lambda x: x[1], reverse=True)
-    top_10_domains = sorted_domains[:10]
-    bottom_10_domains = sorted_domains[-10:]
-
-    print(f"--- Top 10 Domains by Total URLs ---")
-    for domain, count in top_10_domains:
-        print(f"Domain: {domain}, Total URLs: {count}")
-
-    print(f"\n--- Bottom 10 Domains by Total URLs ---")
-    for domain, count in bottom_10_domains:
-        print(f"Domain: {domain}, Total URLs: {count}")
-
-    # Sort the language-specific domains by Maori URLs and get the top 10
-    sorted_language_domains = sorted(domain_results['language_domains'].items(), key=lambda x: x[1], reverse=True)
-    top_10_language_domains = sorted_language_domains[:10]
-    bottom_10_language_domains = sorted_language_domains[-10:]
-    print(f"\n--- Top 10 Domains by {lang_uc} URLs ---")
-    for domain, count in top_10_language_domains:
-        print(f"Domain: {domain}, {lang_uc} URLs: {count}")
-    print(f"\n--- Bottom 10 Domains by Total URLs ---")
-    for domain, count in bottom_10_language_domains:
-        print(f"Domain: {domain}, Total URLs: {count}")
-    print("\n")
-
-    # Confidence and Paragraph Analysis
-    print("--- Confidence and Paragraph Analysis ---")
-    print("--- URLs with Low Confidence ---")
-    low_confidence = sql.count_low_confidence_urls(lang_uc)
-    print(f"Total URLs with Low Confidence: {low_confidence.get('total_low_confidence', 0)}")
-    print("Top 5 Lowest Confidence URLs:")
-    for url_info in low_confidence.get('top_5_lowest_confidence', []):
-        print(f"URL: {url_info[0]}, Confidence: {url_info[1]}")
-    print("\n--- URLs with High Confidence ---")
-    high_confidence = sql.count_high_confidence_urls(lang_uc)
-    print(f"Total URLs with High Confidence: {high_confidence.get('total_high_confidence', 0)}")
-    print("Top 5 Highest Confidence URLs:")
-    for url_info in high_confidence.get('top_5_highest_confidence', []):
-        print(f"URL: {url_info[0]}, Confidence: {url_info[1]}")
-    print("\n--- URLs with Low Paragraph Percentage and Low Confidence ---")
-    low_para_low_conf = sql.count_low_para_percent_low_confidence_urls(lang_uc)
-    print(f"Total: {low_para_low_conf.get('total_low_para_percent_low_confidence', 0)}")
-    print("Top 5 Lowest Paragraph Percentage and Low Confidence URLs:")
-    for url_info in low_para_low_conf.get('top_5_lowest_para_percent_low_confidence', []):
-        print(f"URL: {url_info[0]}, Paragraph Percentage: {url_info[1]}, Confidence: {url_info[2]}")
-    print("\n--- URLs with High Paragraph Percentage and High Confidence ---")
-    high_para_high_conf = sql.count_high_para_percent_high_confidence_urls(lang_uc)
-    print(f"Total: {high_para_high_conf.get('total_high_para_percent_high_confidence', 0)}")
-    print("Top 5 Highest Paragraph Percentage and High Confidence URLs:")
-    for url_info in high_para_high_conf.get('top_5_highest_para_percent_high_confidence', []):
-        print(f"URL: {url_info[0]}, Paragraph Percentage: {url_info[1]}, Confidence: {url_info[2]}")
-    print("\n")
-    # Confidence Ranges
-    print("Confidence Ranges")
-    range_results = sql.count_urls_by_confidence_and_paragraph_percentage_ranges(lang_uc)
-    print("--- URL Counts by Confidence Range ---")
-    for range, count in range_results['confidence'].items():
-        print(f"Confidence Range {range}: {count} URLs")
-
-    print("\n--- URL Counts by Paragraph Percentage Range ---")
-    for range, count in range_results['paragraph'].items():
-        print(f"Paragraph Percentage Range {range}: {count} URLs")
-    print("\n")
-
-    # Search Types Statistics
-    print("--- Search Type Statistics ---")
-    queries = sql.get_all_queries(lang_uc)
-    g_urls = sql.get_url_counts_by_type(lang_uc, const.GOOGLE)
-    ga_urls = sql.get_url_counts_by_type(lang_uc, const.GOOGLE_API)
-    b_urls = sql.get_url_counts_by_type(lang_uc, const.BING)
-    ba_urls = sql.get_url_counts_by_type(lang_uc, const.BING_API)
-    total = g_urls["total_count"] + ga_urls["total_count"] + \
-        b_urls["total_count"] + ba_urls["total_count"]
-    lan_total = g_urls["lan_count"] + ga_urls["lan_count"] + \
-        b_urls["lan_count"] + ba_urls["lan_count"]
-    print(f"--- Google ---")
-    print("Total Urls:", g_urls["total_count"])
-    print("Unhandled Urls:", g_urls["unhandled_count"])
-    print(f"{lang_uc} Urls:", g_urls["lan_count"])
-    print("\n--- Google API ---")
-    print("Total Urls:", ga_urls["total_count"])
-    print("Unhandled Urls:", ga_urls["unhandled_count"])
-    print(f"{lang_uc} Urls:", ga_urls["lan_count"])
-    print("\n--- Bing ---")
-    print("Total Urls:", b_urls["total_count"])
-    print("Unhandled Urls:", b_urls["unhandled_count"])
-    print(f"{lang_uc} Urls:", b_urls["lan_count"])
-    print("\n--- Bing API ---")
-    print("Total Urls:", ba_urls["total_count"])
-    print("Unhandled Urls:", ba_urls["unhandled_count"])
-    print(f"{lang_uc} Urls:", ba_urls["lan_count"])
-    print(f"\n--- Overall Total for {lang_uc} ---")
-    print("Total Queries:", len(queries))
-    print("Total Urls:", total)
-    print(f"Total {lang_uc} Urls:", lan_total)
-    exit(0)
-
-def clean_urls(urls):
-    for url in urls:
-        if 'bing.com' in url[3]:
-            query_params = parse_qs(urlparse(url[3]).query)
-            if 'u' in query_params:
-                encoded_url = query_params['u'][0]
-                try:
-                    temp = "{0}{1}".format(encoded_url[2:], "==")
-                    final_url = base64.b64decode(temp).decode("utf-8")
-                    print("Saving {0}".format(url[0]))
-                    sql.save_bing_url(url[0], final_url)
-                except Exception:
-                    continue
-
-def test():
-    num_files = 100
-    source_dir = 'downloads'
-    destination_dir = 'test'
-    # Ensure the destination directory exists
-    if not os.path.exists(destination_dir):
-        os.makedirs(destination_dir)
-    # Get a list of all files in the source directory
-    all_files = [f for f in os.listdir(source_dir) if os.path.isfile(os.path.join(source_dir, f))]
-    # Initialize an empty list to keep track of files copied
-    copied_files = []
-    while len(copied_files) < num_files and all_files:
-        # Randomly select a file
-        file_to_copy = random.choice(all_files)
-        all_files.remove(file_to_copy)
-        # Construct full file path
-        source_file_path = os.path.join(source_dir, file_to_copy)
-        destination_file_path = os.path.join(destination_dir, file_to_copy)
-        # If the file does not exist in the destination directory, copy it
-        if not os.path.exists(destination_file_path):
-            shutil.copy(source_file_path, destination_file_path)
-            copied_files.append(file_to_copy)
-    print(f"Copied {len(copied_files)} files from {source_dir} to {destination_dir}.")
-    exit(0)
+# def test():
+#     num_files = 100
+#     source_dir = 'downloads'
+#     destination_dir = 'test'
+#     # Ensure the destination directory exists
+#     if not os.path.exists(destination_dir):
+#         os.makedirs(destination_dir)
+#     # Get a list of all files in the source directory
+#     all_files = [f for f in os.listdir(source_dir) if os.path.isfile(os.path.join(source_dir, f))]
+#     # Initialize an empty list to keep track of files copied
+#     copied_files = []
+#     while len(copied_files) < num_files and all_files:
+#         # Randomly select a file
+#         file_to_copy = random.choice(all_files)
+#         all_files.remove(file_to_copy)
+#         # Construct full file path
+#         source_file_path = os.path.join(source_dir, file_to_copy)
+#         destination_file_path = os.path.join(destination_dir, file_to_copy)
+#         # If the file does not exist in the destination directory, copy it
+#         if not os.path.exists(destination_file_path):
+#             shutil.copy(source_file_path, destination_file_path)
+#             copied_files.append(file_to_copy)
+#     print(f"Copied {len(copied_files)} files from {source_dir} to {destination_dir}.")
+#     exit(0)
 
 if __name__ == "__main__":
     globals.config = utils.read_config()
@@ -635,31 +548,26 @@ if __name__ == "__main__":
     
     globals.verbose = globals.args.verbose
     
-    if globals.args.test:
-        test()
+#    if globals.args.test:
+#        test()
+
     if globals.args.set_queries_unhandled:
         sql.set_all_queries_unhandled()
         print("Set all queries as unhandled.")
-    if globals.args.clean_urls:
-        print("Cleaning URLs in database (this might take a while).")
-        urls = sql.get_all_urls()
-        final_urls = clean_urls(urls)
-        print("Finished cleaning URLs in database.")
-        exit(0)
+
+#    if globals.args.clean_urls:
+#        print("Cleaning URLs in database (this might take a while).")
+#        urls = sql.get_all_urls()
+#        final_urls = clean_urls(urls)
+#        print("Finished cleaning URLs in database.")
+#        exit(0)
+        
     try:
 
         validate_args(globals.args)
 
-        # **** XXXX
-        # This shouldn't be a minus arg => always needed!
         lang_uc          = globals.lang_uc
         
-        #word_count    = globals.args.word_count    or globals.config.get('word_count')
-        #query_count   = globals.args.query_count   or globals.config.get('query_count')
-        #search_engine = globals.args.search_engine or globals.config.get('search_engine')
-        #num_threads   = globals.args.num_threads   or globals.config.get('num_threads')
-        #num_pages     = globals.args.num_pages     or globals.config.get('num_pages')
-
         # The following are now explicitly set to their config defaults if not give on CLI
         word_count    = globals.args.word_count
         query_count   = globals.args.query_count
@@ -673,26 +581,29 @@ if __name__ == "__main__":
         # Ensure the downloads directory exists
         downloads_dir = globals.config.get('downloads_dir')
         if not os.path.exists(downloads_dir):
+            print(f"Creating download directory: {downloads_dir}")
             os.makedirs(downloads_dir)
         
         # Create the database
+        database_filename = globals.config.get('database_file')
+        print(f"Creating database: {database_filename}")        
+        sql.set_db_filename(database_filename)        
         sql.create(reset=False)
+        
         if globals.args.display_stats:
-            display_stats(lang_uc)
+            display.stats(lang_uc)
             exit(0)
-#        # Get dictionary from UDHR PDFs
-#        if extract_dictionary:
-#            extractOrig(reset=False)
 
         # Queries
-        if globals.args.only_querygen or globals.args.all:
+        if globals.args.run_querygen or globals.args.run_all:
             print("Generating Queries.")
             queries = queries.generate_all(lang_uc, word_count, query_count)
+            
         # Search
-        if globals.args.only_search or globals.args.all:
+        if globals.args.run_search or globals.args.run_all:
             print("Running Search.")
             # Get all relevant queries from the database
-            queries = sql.get_all_queries(lang_uc, True) # **** XXXX Want to get all the unhandled ones
+            queries = sql.get_all_queries(lang_uc, handled=False)
             # Split queries into sub-lists for each thread
             split_queries = [queries[i::num_threads]
                              for i in range(num_threads)]
@@ -719,10 +630,38 @@ if __name__ == "__main__":
             for query in queries:
                 sql.set_query_as_handled(query[0])
             print("All Search-threads have finished.")
-        # NLP
-        if globals.args.only_nlp or globals.args.all:
+
+        # Download
+        if globals.args.run_download or globals.args.run_all:
             # Get all relevant queries from the database
-            urls = sql.get_all_urls(True) # **** XXXX unhandled_flag ??
+            urls = sql.get_all_urls_filter_downloaded(downloaded=False)
+            print(f"Number of urls to be downloaded: {len(urls)}")
+            # Split queries into sub-lists for each thread
+            split_urls = [urls[i::num_threads]
+                             for i in range(num_threads)]
+
+            # Create and start threads
+            threads = []
+            print("Starting nlp threads.")
+            tcount = 1
+            for sub_urls in split_urls:
+                t = threading.Thread(target=download_worker, args=(
+                    sub_urls, globals.args.download_with_selenium,globals.args.apply_robots_txt,tcount))
+                threads.append(t)
+                t.start()
+                tcount += 1
+
+            # Wait for all threads to finish
+            for t in threads:
+                if stop_event.is_set():
+                    exit(0)
+                t.join()
+            print("All Download-threads have finished.")
+
+        # NLP
+        if globals.args.run_nlp or globals.args.run_all:
+            # Get all relevant queries from the database
+            urls = sql.get_all_urls_filter_downloaded_handled(downloaded=True,handled=False) 
             print(f"Number of urls to be processed by NLP: {len(urls)}")
             # Split queries into sub-lists for each thread
             split_urls = [urls[i::num_threads]
@@ -734,7 +673,7 @@ if __name__ == "__main__":
             tcount = 1
             for sub_urls in split_urls:
                 t = threading.Thread(target=nlp_worker, args=(
-                    sub_urls, globals.args.download_with_selenium,globals.args.apply_robots_txt,  Language.MAORI, tcount)) # **** XXXX hard-wire MAORI, but passing object, note name!!!
+                    sub_urls, globals.lang_uc,globals.config['downloads_dir'], tcount))
                 threads.append(t)
                 t.start()
                 tcount += 1
@@ -743,16 +682,12 @@ if __name__ == "__main__":
                 if stop_event.is_set():
                     exit(0)
                 t.join()
-            # **** XXXX why is this block commented out???
-            # Set query as handled
-            # print("Setting urls as handled.")
-            # for url in urls:
-            #     set_url_as_handled(url[0])
-            print("All Download+NLP-threads have finished.")
 
-        if globals.args.all:
-            display_stats(lang_uc)
-        
+            print("All NLP-threads have finished.")
+            
+        if globals.args.run_all:
+            display.stats(lang_uc)
+            
     except KeyboardInterrupt:
         print("Stopping all threads")
         # Signal all threads to stop

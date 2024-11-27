@@ -2,7 +2,7 @@
 
 rm -rf querydownload.db downloads \
     && ./lrl-crawler.py \
-			--all \
+			--run_all \
 			--query_count 1 \
 			--search_engine bing_selenium \
 			--download_with_selenium \

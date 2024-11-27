@@ -7,7 +7,9 @@ from urllib.parse import urlparse
 
 dbname = "querydownload.db"
 
-
+def set_db_filename(filename):
+    dbname = filename
+    
 @contextmanager
 def get_cursor():
     """Context manager for SQLite database cursor."""
@@ -46,6 +48,7 @@ def create(reset=False):
             url_hash TEXT NOT NULL,
             file_hash TEXT,
             doc_type TEXT,
+            downloaded BOOLEAN DEFAULT 0,
             handled BOOLEAN DEFAULT 0,
             full_lan TEXT,
             paragraph_lan INTEGER DEFAULT 0,
@@ -72,12 +75,11 @@ def insert_url(query_id, type, url, doc_type=""):
         """, (query_id, type, url, url_hash, doc_type))
 
 
-def get_all_queries(lan, unhandled=None):
+def get_all_queries(lan, handled=None):
     """Retrieve all queries from the queries table."""
 
-    handled = not unhandled
     with get_cursor() as cursor:
-        if unhandled is None:
+        if handled is None:
             cursor.execute("SELECT * FROM queries WHERE lan=?", (lan,))
             return cursor.fetchall()
         else:
@@ -86,21 +88,39 @@ def get_all_queries(lan, unhandled=None):
             return cursor.fetchall()
 
 
-def get_all_urls(unhandled=None):
+def get_all_urls(): 
     """Retrieve all URLs from the urls table."""
 
-    handled = not unhandled
-    
     with get_cursor() as cursor:
-        if unhandled is None:
-            cursor.execute("SELECT * FROM urls")
-            return cursor.fetchall()
-        else:
-            cursor.execute(
-                "SELECT * FROM urls WHERE handled=?", (handled,))
-            return cursor.fetchall()
+        cursor.execute("SELECT * FROM urls")
+        return cursor.fetchall()
 
-        
+
+def get_all_urls_filter_downloaded(downloaded=True): 
+    """Retrieve all URLs from the urls table."""
+
+    with get_cursor() as cursor:
+        cursor.execute(
+            "SELECT * FROM urls WHERE downloaded=?", (downloaded,))
+        return cursor.fetchall()
+
+def get_all_urls_filter_downloaded_handled(downloaded=True, handled=True): 
+    """Retrieve all URLs from the urls table."""
+
+    with get_cursor() as cursor:
+        cursor.execute(
+            "SELECT * FROM urls WHERE downloaded=? AND handled=?", (downloaded,handled,))
+        return cursor.fetchall()
+
+def get_all_urls_filter_handled(handled=True): 
+    """Retrieve all URLs from the urls table."""
+
+    with get_cursor() as cursor:
+        cursor.execute(
+            "SELECT * FROM urls WHERE handled=?", (handleed,))
+        return cursor.fetchall()
+
+    
 def query_exists(query):
     """Check if a query already exists in the queries table."""
     with get_cursor() as cursor:
@@ -116,16 +136,7 @@ def insert_query_if_not_exists(query, type, lan):
         return True
     return False
 
-def save_bing_url(url_id, final_url): # **** XXXX Changed, but not sure why this function exists
-    """Insert a URL into the urls table if it doesn't already exist."""
-    with get_cursor() as cursor:
-        cursor.execute("""
-            UPDATE urls
-            SET url=?, handled=False
-            WHERE id=?
-        """, (final_url, url_id))
-
-def insert_url_if_not_exists(query_id, type, url, doc_type=""):
+def insert_url_if_not_exists(query_id, type, url, doc_type="", downloaded=False, handled=False):
     """Insert a URL into the urls table if it doesn't already exist."""
     with get_cursor() as cursor:
         url_hash = utils.hash_url(url)
@@ -133,9 +144,9 @@ def insert_url_if_not_exists(query_id, type, url, doc_type=""):
             "SELECT EXISTS(SELECT 1 FROM urls WHERE url_hash=?)", (url_hash,))
         if not bool(cursor.fetchone()[0]):
             cursor.execute("""
-                INSERT INTO urls (query_id, type, url, url_hash, doc_type, handled)
-                VALUES (?, ?, ?, ?, ?, 0)
-            """, (query_id, type, url, url_hash, doc_type))
+                INSERT INTO urls (query_id, type, url, url_hash, doc_type, downloaded, handled)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (query_id, type, url, url_hash, doc_type, downloaded, handled))
             return True
     return False
 
@@ -145,14 +156,23 @@ def get_url_by_id(id):
         cursor.execute("SELECT * FROM urls WHERE id=?", (id,))
         return cursor.fetchone()
 
-def get_url_file_hash(url_id, file_hash):
-    """Retrieve a URL from the urls table by its File Hash."""
+def get_url_duplicate_handled_file_hash(url_id, file_hash): 
+    """Retrieve a URL from the urls table by its File Hash, where its 'id' is different to 'url_id'"""
     with get_cursor() as cursor:
-        cursor.execute("SELECT * FROM urls WHERE id!=? AND file_hash=? AND handled=True LIMIT 1", (url_id, file_hash,))
+        cursor.execute("SELECT * FROM urls WHERE id!=? AND file_hash=? AND handled=True LIMIT 1",
+                       (url_id, file_hash,))
         return cursor.fetchone()
 
-def update_url_by_id(id, file_hash, doc_type, full_lan, paragraph_lan):
+# **** XXXX Not currently called
+# Perhaps better to break down to updated downloaded (fileinfo), and nlp (langinfo)
+# there are better routines that already exist update_url__fileinfo() and update_url_langinfo() that can be used
+# !!!! doesn't set confidence, is this an oversight??
+def update_url_by_id_DEPRECATED(id, file_hash, doc_type, full_lan, paragraph_lan):
     """Update a URL's attributes in the urls table by its ID."""
+
+    # If setting these fields, then implicitly the doc has been handled
+    # => ensure handled=1
+    
     with get_cursor() as cursor:
         cursor.execute("""
             UPDATE urls
@@ -176,25 +196,29 @@ def urls_exist(url_hashes, type):
         existing_hashes = {row[0] for row in cursor.fetchall()}
     return existing_hashes
 
+# **** XXXX this would benefit from being refactored to avoid implicit elem[] positions
 def insert_urls_many(url_data):
     """Inserts multiple URLs at once into the database after filtering existing ones."""
+
     # Separate hashes for existing check
     hashes_to_check = [item[3] for item in url_data]
     type_to_check = url_data[0][1]
     existing_hashes = urls_exist(hashes_to_check, type_to_check)
+
     # Filter out the URLs that already exist based on hash and type
     filtered_data = [item for item in url_data if item[3]
                      not in existing_hashes]
     if not filtered_data:  # If all URLs already exist, return early
         return
+
     with get_cursor() as cursor:
         cursor.executemany("""
-            INSERT INTO urls (query_id, type, url, url_hash, handled)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO urls (query_id, type, url, url_hash, downloaded, handled)
+            VALUES (?, ?, ?, ?, ?, ?)
         """, filtered_data)
 
 def set_query_as_handled(query_id):
-    """Sets the unhandled flag of a query to False."""
+    """Sets the handled flag of a query to True."""
     with get_cursor() as cursor:
         cursor.execute("""
             UPDATE queries
@@ -202,35 +226,79 @@ def set_query_as_handled(query_id):
             WHERE id = ?
         """, (query_id,))
 
+def set_url_as_downloaded(url_id):
+    """Sets the downloaded flag of a url to True."""
+    with get_cursor() as cursor:
+        cursor.execute("""
+            UPDATE urls
+            SET downloaded = True
+            WHERE id = ?
+        """, (url_id,))
+
 def set_url_as_handled(url_id):
-    """Sets the unhandled flag of a url to False."""
+    """Sets the handled flag of a url to True."""
     with get_cursor() as cursor:
         cursor.execute("""
             UPDATE urls
             SET handled = True
             WHERE id = ?
         """, (url_id,))
-
-def update_url(url_id, file_hash, doc_type, full_lan, confidence, paragraph_lan):
+        
+def update_url_fileinfo(url_id, file_hash, doc_type, downloaded=True):
     """Sets multiple values of the URL."""
     with get_cursor() as cursor:
         cursor.execute("""
             UPDATE urls
-            SET handled = True,
-                file_hash  = ?,
+            SET file_hash  = ?,
                 doc_type  = ?,
-                full_lan  = ?,
-                confidence  = ?,
-                paragraph_lan  = ?
+                downloaded = ?
             WHERE id = ?
-        """, (file_hash, doc_type, full_lan, confidence, paragraph_lan, url_id,))
+        """, (file_hash,doc_type,downloaded, url_id))
 
+def update_url_langinfo(url_id, full_lan, confidence, paragraph_lan, handled=True): 
+    """Sets multiple values of the URL."""
+
+    with get_cursor() as cursor:
+        cursor.execute("""
+            UPDATE urls
+            SET full_lan  = ?,
+                confidence  = ?,
+                paragraph_lan  = ?,
+                handled = ?
+            WHERE id = ?
+        """, (full_lan, confidence, paragraph_lan, handled, url_id))
+
+# **** XXXX
+# original, before split in two, above for download and nlp-handled
+#def update_url(url_id, file_hash, doc_type, full_lan, confidence, paragraph_lan):
+#    """Sets multiple values of the URL."""
+#    with get_cursor() as cursor:
+#        cursor.execute("""
+#            UPDATE urls
+#            SET handled = True,
+#                file_hash  = ?,
+#                doc_type  = ?,
+#                full_lan  = ?,
+#                confidence  = ?,
+#                paragraph_lan  = ?
+#            WHERE id = ?
+#        """, (file_hash, doc_type, full_lan, confidence, paragraph_lan, url_id,))
+
+        
 def set_all_queries_unhandled():
     """Set all queries in the database as unhandled."""
     with get_cursor() as cursor:
         cursor.execute("""
             UPDATE queries
             SET handled = False
+        """)
+
+def set_all_urls_undownloaded():
+    """Set all urls in the database as unhandled."""
+    with get_cursor() as cursor:
+        cursor.execute("""
+            UPDATE urls
+            SET downloaded = False
         """)
 
 def set_all_urls_unhandled():
@@ -241,6 +309,7 @@ def set_all_urls_unhandled():
             SET handled = False
         """)
 
+        
 def get_most_common_urls():
     """Count the number of URLs grouped by their unique query counts."""
     with get_cursor() as cursor:
@@ -271,13 +340,13 @@ def hash_exists_in_db(file_hash):
         count = cursor.fetchone()[0]
     return count > 0
 
-def set_all_queries_lan_to_maori():
-    """Sets the lan field of all queries in the database to 'MAORI'."""
-    with get_cursor() as cursor:
-        cursor.execute("""
-            UPDATE queries
-            SET lan = 'MAORI'
-        """)
+#def set_all_queries_lan_to_maori():
+#    """Sets the lan field of all queries in the database to 'MAORI'."""
+#    with get_cursor() as cursor:
+#        cursor.execute("""
+#            UPDATE queries
+#            SET lan = 'MAORI'
+#        """)
 
 # Display
 def count_query_types():
@@ -304,6 +373,22 @@ def count_urls_per_query_type():
         result = cursor.fetchall()
     return dict(result)
 
+# **** XXXX
+# Not a thing for *queries* database table!!!
+# def count_downloaded_undownloaded_queries():
+#     with get_cursor() as cursor:
+#         cursor.execute("""
+#             SELECT handled, COUNT(*) as count
+#             FROM queries
+#             GROUP BY downloaded
+#         """)
+#         results = cursor.fetchall()
+#         output = {"undownloaded": 0, "downloaded": 0}
+#         for result in results:
+#             key = "undownloaded" if result[0] == 0 else "downloaded"
+#             output[key] = result[1]
+#         return output
+
 def count_handled_unhandled_queries():
     with get_cursor() as cursor:
         cursor.execute("""
@@ -318,6 +403,7 @@ def count_handled_unhandled_queries():
             output[key] = result[1]
         return output
 
+    
 def count_duplicate_queries():
     with get_cursor() as cursor:
         cursor.execute("""
@@ -532,24 +618,32 @@ def count_high_para_percent_high_confidence_urls(lan, para_threshold=90, confide
             "top_5_highest_para_percent_high_confidence": highest
         }
         return result
-    
+
+# Not currently called
 def get_url_counts_by_query_id(lan, query_id):
-    """Returns the total number of URLs, the number of unhandled URLs, and the number of URLs with non-null full_lan for a given query ID."""
+    """Returns the total number of URLs, the number of URLs not downloaded, the number of unhandled URLs, and the number of URLs with non-null full_lan for a given query ID."""
     with get_cursor() as cursor:
         # Total URLs count
         cursor.execute(
             "SELECT COUNT(*) FROM urls WHERE query_id=?", (query_id,))
         total_count = cursor.fetchone()[0]
+
+        # Total unhandled URLs count
+        cursor.execute(
+            "SELECT COUNT(*) FROM urls WHERE query_id=? AND downloaded=?", (query_id, False))
+        undownloaded_count = cursor.fetchone()[0]
         # Total unhandled URLs count
         cursor.execute(
             "SELECT COUNT(*) FROM urls WHERE query_id=? AND handled=?", (query_id, False))
-        unhandled_count = cursor.fetchone()[0]
+        unhandled_count = cursor.fetchone()[0]        
+
         # Total URLs with non-null full_lan
         cursor.execute(
             "SELECT COUNT(*) FROM urls WHERE query_id=? AND full_lan=?", (query_id, lan))
         full_lan_count = cursor.fetchone()[0]
         return {
             "total_count": total_count,
+            "undownloaded_count": undownloaded_count,
             "unhandled_count": unhandled_count,
             "full_lan_count": full_lan_count
         }
@@ -566,6 +660,7 @@ def get_url_counts_by_type(lan, search_type):
         cursor.execute("""
             SELECT 
                 COUNT(*) as total_count,
+                SUM(CASE WHEN u.downloaded = 0 THEN 1 ELSE 0 END) as undownloaded_count,
                 SUM(CASE WHEN u.handled = 0 THEN 1 ELSE 0 END) as unhandled_count,
                 SUM(CASE WHEN u.full_lan = ? THEN 1 ELSE 0 END) as full_lan_count
             FROM queries q
@@ -574,14 +669,18 @@ def get_url_counts_by_type(lan, search_type):
         """, (lan, lan, search_type))
 
         result = cursor.fetchone()
-        unhandled = 0
+        undownloaded = 0
         if result[1] is not None:
-            unhandled = result[1]
-        full_lan = 0
+            undownloaded = result[1]
+        unhandled = 0
         if result[2] is not None:
-            full_lan = result[2]
+            unhandled = result[2]
+        full_lan = 0
+        if result[3] is not None:
+            full_lan = result[3]
         return {
             "total_count": result[0],
+            "undownloaded_count": unhandled,
             "unhandled_count": unhandled,
             "lan_count": full_lan
         }
