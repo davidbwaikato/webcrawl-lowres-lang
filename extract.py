@@ -64,18 +64,20 @@ def extractDEPRECATED(reset=False):
             print(f"{filename} already exists.  As function argument 'reset'={reset}, not overwriting file")
 
 
-def extractNew(lang,force=False,verbose=False):
+def extract(lang_initialcap,force=False):
     """Process each file and save results to JSON"""
 
-    languages = globals.config['languages']
+    verbose = globals.verbose
+    
+    config_languages = globals.config['languages']
 
-    for language, item in languages.items():
-        # print(f"args.lang={lang}, language = {language}")
+    for config_language, item in config_languages.items():
+        # print(f"args.lang={lang_initialcap}, config_language = {config_language}")
         
-        if (lang != "All") and (lang != language):
+        if (lang_initialcap != "All") and (lang_initialcap != config_language):
             continue
 
-        print(f"Processing langauge: {language}")
+        print(f"Processing langauge: {config_language}")
         
         file_path = item['path']
         if file_path.endswith('.pdf'):
@@ -88,9 +90,9 @@ def extractNew(lang,force=False,verbose=False):
 
         tokens = preprocess_text(text)
         common_words = get_common_words(tokens)
-        filename = f"dicts/common_words_{language.lower()}.json"
+        filename = f"dicts/common_words_{config_language.lower()}.json"
 
-        if (verbose):
+        if (verbose>1):
             print(json.dump(dict(common_words), fp=sys.stdout, ensure_ascii=False, indent=4))
             
         # Check if file exists and act according to `force` parameter
