@@ -1,4 +1,6 @@
 
+ * support text/plain
+ 
 * config params for chunking text for NLP
 
 * 2nd phase get frequency dict
