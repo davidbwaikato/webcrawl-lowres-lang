@@ -53,8 +53,6 @@ def get_args():
         prog="lrl-carwler.py",
         description="Focused web crawler for dowloading pages in low-resourced languages"
     )
-    #parser.add_argument("lang", default=Language.MAORI.name,
-    #                    help=f"language used for generating queries [Default={Language.MAORI.name}]")
     parser.add_argument("-v", "--verbose", type=int,
                         default=1, help=f"level of verbosity used for output [Default=1]")
 
@@ -102,6 +100,7 @@ def get_args():
 #    parser.add_argument("-test", "--test", action="store_true",
 #                        default=False, help="Testing flag")
 
+    # Positional argument
     parser.add_argument("lang",
                         help=f"language used for generating queries")
     
@@ -126,17 +125,17 @@ def set_nlp_values_from_existing(url_id, file_hash):
         return 0
 
     # **** XXXX
-    # Clone across the values for 'doc_type', 'full_lan', 'confidence', 'paragraph_lan'
+    # Clone across the values for 'doc_type', 'full_lang', 'confidence', 'paragraph_lan'
     #sql.update_url(url_id, file_hash, existing[6], existing[9], existing[11], existing[10])
 
     doc_type      = existing[6]
-    full_lan      = existing[9]
+    full_lang     = existing[9]
     confidence    = existing[11]
     paragraph_lan = existing[10]
 
     # Clone the entry, based on the duplicate entry's values
     update_url_fileinfo(url_id, file_hash, doc_type, downloaded=True)
-    update_url_langinfo(url_id, full_lan, confidence, paragraph_lan, handled=True)
+    update_url_langinfo(url_id, full_lang, confidence, paragraph_lan, handled=True)
     
     return 1
 

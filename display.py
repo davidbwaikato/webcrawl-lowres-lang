@@ -27,23 +27,23 @@ def stats(lang_uc):
     print("--- Query Types by Total URLs and URLs with Given Language ---")
     query_types_by_total_urls = sql.count_query_types_by_total_urls(lang_uc)
     for query_info in query_types_by_total_urls:
-        print(f"Query Type: {query_info['type']}, Total URL Count: {query_info['total_url_count']}, Total URL with {lang_uc} Count: {query_info['total_url_with_lan_count']}\n")
+        print(f"Query Type: {query_info['type']}, Total URL Count: {query_info['total_url_count']}, Total URL with {lang_uc} Count: {query_info['total_url_with_lang_count']}\n")
 
     # Print top queries with most, least and language URLs
     print("--- Top Queries ---")
     top_queries_most_urls = sql.get_top_queries_with_most_urls(lang_uc)
     print("--- Top Queries with Most URLs ---")
     for query_info in top_queries_most_urls[:5]:
-        print(f"Index: {query_info['index']}, Query: {query_info['query']}, Type: {query_info['type']}, URL Count: {query_info['total_url_count']}, {lang_uc} URL Count: {query_info['lan_url_count']}")
+        print(f"Index: {query_info['index']}, Query: {query_info['query']}, Type: {query_info['type']}, URL Count: {query_info['total_url_count']}, {lang_uc} URL Count: {query_info['lang_url_count']}")
 
     print("\n--- Top Queries with Least URLs ---")
     for query_info in top_queries_most_urls[-5:]:
-        print(f"Index: {query_info['index']}, Query: {query_info['query']}, Type: {query_info['type']}, URL Count: {query_info['total_url_count']}, {lang_uc} URL Count: {query_info['lan_url_count']}")
+        print(f"Index: {query_info['index']}, Query: {query_info['query']}, Type: {query_info['type']}, URL Count: {query_info['total_url_count']}, {lang_uc} URL Count: {query_info['lang_url_count']}")
     
-    top_queries_most_urls.sort(key=lambda x: x['lan_url_count'], reverse=True)
+    top_queries_most_urls.sort(key=lambda x: x['lang_url_count'], reverse=True)
     print("\n--- Top 5 Queries by Maori URLs ---")
     for query_info in top_queries_most_urls[:5]:
-        print(f"Index: {query_info['index']}, Query: {query_info['query']}, Type: {query_info['type']}, URL Count: {query_info['total_url_count']}, {lang_uc} URL Count: {query_info['lan_url_count']}")
+        print(f"Index: {query_info['index']}, Query: {query_info['query']}, Type: {query_info['type']}, URL Count: {query_info['total_url_count']}, {lang_uc} URL Count: {query_info['lang_url_count']}")
     print("\n")
 
 
@@ -144,34 +144,32 @@ def stats(lang_uc):
     ba_urls = sql.get_url_counts_by_type(lang_uc, const.BING_API)
     total = g_urls["total_count"] + ga_urls["total_count"] + \
         b_urls["total_count"] + ba_urls["total_count"]
-    lan_total = g_urls["lan_count"] + ga_urls["lan_count"] + \
-        b_urls["lan_count"] + ba_urls["lan_count"]
+    lang_total = g_urls["lang_count"] + ga_urls["lang_count"] + \
+        b_urls["lang_count"] + ba_urls["lang_count"]
 
     print(f"--- Google ---")
     print("Total Urls:", g_urls["total_count"])
     print("Not-Downloaded Urls:", g_urls["undownloaded_count"])
     print("NLP-Unhandled Urls :", g_urls["unhandled_count"])
-    print(f"{lang_uc} Urls:", g_urls["lan_count"])
+    print(f"{lang_uc} Urls:", g_urls["lang_count"])
     print("\n--- Google API ---")
     print("Total Urls:", ga_urls["total_count"])
     print("Not-Downloaded Urls:", ga_urls["undownloaded_count"])
     print("NLP-Unhandled Urls :", ga_urls["unhandled_count"])
-    print(f"{lang_uc} Urls:", ga_urls["lan_count"])
+    print(f"{lang_uc} Urls:", ga_urls["lang_count"])
 
     print("\n--- Bing ---")
     print("Total Urls:", b_urls["total_count"])
     print("Not-Downloaded Urls:", b_urls["undownloaded_count"])
     print("NLP-Unhandled Urls :", b_urls["unhandled_count"])
-    print(f"{lang_uc} Urls:", b_urls["lan_count"])
+    print(f"{lang_uc} Urls:", b_urls["lang_count"])
     print("\n--- Bing API ---")
     print("Total Urls:", ba_urls["total_count"])
     print("Not-Downloaded Urls:", ba_urls["undownloaded_count"])
     print("NLP-Unhandled Urls :", ba_urls["unhandled_count"])
-    print(f"{lang_uc} Urls:", ba_urls["lan_count"])
+    print(f"{lang_uc} Urls:", ba_urls["lang_count"])
 
     print(f"\n--- Overall Total for {lang_uc} ---")
     print("Total Queries:", len(queries))
     print("Total Urls:", total)
-    print(f"Total {lang_uc} Urls:", lan_total)
-
-    # exit(0)
+    print(f"Total {lang_uc} Urls:", lang_total)
