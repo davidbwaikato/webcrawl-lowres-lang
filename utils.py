@@ -3,6 +3,21 @@ import jsonc
 import hashlib
 from const import GOOGLE, GOOGLE_API, BING, BING_API, QUERY, TYPE, TOTAL, MAORI, UNHANDLED, ITEMS
 
+def move_file(src_path,dst_path):
+    try:
+        os.rename(src_path,dst_path)
+    except Exception as e:
+        print(f"Error renaming file from {src_path} to {dst_path}: {e}")
+
+def delete_file(path):
+    try:
+        os.remove(path)
+    except FileNotFoundError:
+        print(f"File not found: {path}")
+    except Exception as e:
+        print(f"Error deleting file: {e}")
+        
+
 # def read_file(filename):
 #     """Read file in UTF-8 format"""
 #     with open(filename, 'r', encoding='utf-8') as f:

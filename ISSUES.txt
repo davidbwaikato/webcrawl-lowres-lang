@@ -1,4 +1,6 @@
 
+ * Combine lang into DB name and downloads dir
+ 
  * support text/plain
  
 * config params for chunking text for NLP

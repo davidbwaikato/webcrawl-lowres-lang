@@ -50,9 +50,11 @@ def create(reset=False):
             doc_type TEXT,
             downloaded BOOLEAN DEFAULT 0,
             handled BOOLEAN DEFAULT 0,
-            full_lang TEXT,
-            paragraph_lang INTEGER DEFAULT 0,
-            confidence INTEGER,
+            nlp_full_lang TEXT,
+            nlp_full_confidence INTEGER,
+            nlp_para_count_lrl INTEGER DEFAULT 0,
+            nlp_para_count INTEGER DEFAULT 0,
+            nlp_para_perc_lrl INTEGER DEFAULT 0,
             FOREIGN KEY (query_id) REFERENCES queries(id)
         )
         ''')
@@ -163,23 +165,6 @@ def get_url_duplicate_handled_file_hash(url_id, file_hash):
                        (url_id, file_hash,))
         return cursor.fetchone()
 
-# **** XXXX Not currently called
-# Perhaps better to break down to updated downloaded (fileinfo), and nlp (langinfo)
-# there are better routines that already exist update_url__fileinfo() and update_url_langinfo() that can be used
-# !!!! doesn't set confidence, is this an oversight??
-def update_url_by_id_DEPRECATED(id, file_hash, doc_type, full_lang, paragraph_lang):
-    """Update a URL's attributes in the urls table by its ID."""
-
-    # If setting these fields, then implicitly the doc has been handled
-    # => ensure handled=1
-    
-    with get_cursor() as cursor:
-        cursor.execute("""
-            UPDATE urls
-            SET file_hash=?, doc_type=?, full_lang=?, paragraph_lang=?, handled=1
-            WHERE id=?
-        """, (file_hash, doc_type, full_lang, paragraph_lang, id))
-
 def update_query_handled_by_id(id):
     """Updates the handled value to true for a given query ID in the queries table."""
     with get_cursor() as cursor:
@@ -255,18 +240,20 @@ def update_url_fileinfo(url_id, file_hash, doc_type, downloaded=True):
             WHERE id = ?
         """, (file_hash,doc_type,downloaded, url_id))
 
-def update_url_langinfo(url_id, full_lang, confidence, paragraph_lang, handled=True): 
+def update_url_langinfo(url_id, nlp_full_lang, nlp_full_confidence, nlp_para_count_lrl, nlp_para_count, nlp_para_perc_lrl, handled=True): 
     """Sets multiple values of the URL."""
 
     with get_cursor() as cursor:
         cursor.execute("""
             UPDATE urls
-            SET full_lang  = ?,
-                confidence  = ?,
-                paragraph_lang  = ?,
+            SET nlp_full_lang  = ?,
+                nlp_full_confidence  = ?,
+                nlp_para_count_lrl  = ?,
+                nlp_para_count  = ?,
+                nlp_para_perc_lrl  = ?,
                 handled = ?
             WHERE id = ?
-        """, (full_lang, confidence, paragraph_lang, handled, url_id))
+        """, (nlp_full_lang, nlp_full_confidence, nlp_para_count_lrl, nlp_para_count, nlp_para_perc_lrl, handled, url_id))
 
 # **** XXXX
 # original, before split in two, above for download and nlp-handled
@@ -498,7 +485,7 @@ def count_doc_types_for_language_total(lang):
         cursor.execute("""
             SELECT doc_type, 
                    COUNT(*) as total_count, 
-                   SUM(CASE WHEN full_lang = ? THEN 1 ELSE 0 END) as language_count
+                   SUM(CASE WHEN nlp_full_lang = ? THEN 1 ELSE 0 END) as language_count
             FROM urls
             GROUP BY doc_type
         """, (lang,))
@@ -513,17 +500,17 @@ def count_low_confidence_urls(lang, confidence_threshold=0.9):
         cursor.execute("""
             SELECT COUNT(*) as count
             FROM urls
-            WHERE full_lang = ? AND confidence < ?
+            WHERE nlp_full_lang = ? AND nlp_full_confidence < ?
         """, (lang, confidence_threshold))
         total_count_row = cursor.fetchone()
         total_count = total_count_row[0] if total_count_row else 0
 
         # Get top 5 URLs with lowest confidence
         cursor.execute("""
-            SELECT url, confidence
+            SELECT url, nlp_full_confidence
             FROM urls
-            WHERE full_lang = ? AND confidence < ?
-            ORDER BY confidence ASC
+            WHERE nlp_full_lang = ? AND nlp_full_confidence < ?
+            ORDER BY nlp_full_confidence ASC
             LIMIT 5
         """, (lang, confidence_threshold))
         lowest = cursor.fetchall()
@@ -541,17 +528,17 @@ def count_high_confidence_urls(lang, confidence_threshold=0.9):
         cursor.execute("""
             SELECT COUNT(*) as count
             FROM urls
-            WHERE full_lang = ? AND confidence >= ?
+            WHERE nlp_full_lang = ? AND nlp_full_confidence >= ?
         """, (lang, confidence_threshold))
         total_count_row = cursor.fetchone()
         total_count = total_count_row[0] if total_count_row else 0
 
         # Get top 5 URLs with highest confidence
         cursor.execute("""
-            SELECT url, confidence
+            SELECT url, nlp_full_confidence
             FROM urls
-            WHERE full_lang = ? AND confidence >= ?
-            ORDER BY confidence DESC
+            WHERE nlp_full_lang = ? AND nlp_full_confidence >= ?
+            ORDER BY nlp_full_confidence DESC
             LIMIT 5
         """, (lang, confidence_threshold))
         lowest = cursor.fetchall()
@@ -570,17 +557,17 @@ def count_low_para_percent_low_confidence_urls(lang, para_threshold=90, confiden
         cursor.execute("""
             SELECT COUNT(*) as count
             FROM urls
-            WHERE full_lang = ? AND paragraph_lang < ? AND confidence < ?
+            WHERE nlp_full_lang = ? AND nlp_para_perc_lrl < ? AND nlp_full_confidence < ?
         """, (lang, para_threshold, confidence_threshold))
         total_count_row = cursor.fetchone()
         total_count = total_count_row[0] if total_count_row else 0
 
         # Get top 5 URLs with lowest paragraph percentage and low confidence
         cursor.execute("""
-            SELECT url, paragraph_lang, confidence
+            SELECT url, nlp_para_perc_lrl, nlp_full_confidence
             FROM urls
-            WHERE full_lang = ? AND paragraph_lang < ? AND confidence < ?
-            ORDER BY paragraph_lang ASC, confidence ASC
+            WHERE nlp_full_lang = ? AND nlp_para_perc_lrl < ? AND nlp_full_confidence < ?
+            ORDER BY nlp_para_perc_lrl ASC, nlp_full_confidence ASC
             LIMIT 5
         """, (lang, para_threshold, confidence_threshold))
         lowest = cursor.fetchall()
@@ -598,17 +585,17 @@ def count_high_para_percent_high_confidence_urls(lang, para_threshold=90, confid
         cursor.execute("""
             SELECT COUNT(*) as count
             FROM urls
-            WHERE full_lang = ? AND paragraph_lang >= ? AND confidence >= ?
+            WHERE nlp_full_lang = ? AND nlp_para_perc_lrl >= ? AND nlp_full_confidence >= ?
         """, (lang, para_threshold, confidence_threshold))
         total_count_row = cursor.fetchone()
         total_count = total_count_row[0] if total_count_row else 0
 
         # Get top 5 URLs with highest paragraph percentage and high confidence
         cursor.execute("""
-            SELECT url, paragraph_lang, confidence
+            SELECT url, nlp_para_perc_lrl, nlp_full_confidence
             FROM urls
-            WHERE full_lang = ? AND paragraph_lang >= ? AND confidence >= ?
-            ORDER BY paragraph_lang DESC, confidence DESC
+            WHERE nlp_full_lang = ? AND nlp_para_perc_lrl >= ? AND nlp_full_confidence >= ?
+            ORDER BY nlp_para_perc_lrl DESC, nlp_full_confidence DESC
             LIMIT 5
         """, (lang, para_threshold, confidence_threshold))
         highest = cursor.fetchall()
@@ -621,7 +608,7 @@ def count_high_para_percent_high_confidence_urls(lang, para_threshold=90, confid
 
 # Not currently called
 def get_url_counts_by_query_id(lang, query_id):
-    """Returns the total number of URLs, the number of URLs not downloaded, the number of unhandled URLs, and the number of URLs with non-null full_lang for a given query ID."""
+    """Returns the total number of URLs, the number of URLs not downloaded, the number of unhandled URLs, and the number of URLs with non-null nlp_full_lang for a given query ID."""
     with get_cursor() as cursor:
         # Total URLs count
         cursor.execute(
@@ -637,9 +624,9 @@ def get_url_counts_by_query_id(lang, query_id):
             "SELECT COUNT(*) FROM urls WHERE query_id=? AND handled=?", (query_id, False))
         unhandled_count = cursor.fetchone()[0]        
 
-        # Total URLs with non-null full_lang
+        # Total URLs with non-null nlp_full_lang
         cursor.execute(
-            "SELECT COUNT(*) FROM urls WHERE query_id=? AND full_lang=?", (query_id, lang))
+            "SELECT COUNT(*) FROM urls WHERE query_id=? AND nlp_full_lang=?", (query_id, lang))
         full_lang_count = cursor.fetchone()[0]
         return {
             "total_count": total_count,
@@ -650,7 +637,7 @@ def get_url_counts_by_query_id(lang, query_id):
 
 def get_url_counts_by_type(lang, search_type):
     """
-    Returns the total number of URLs, the number of unhandled URLs, and the number of URLs with a specific full_lang 
+    Returns the total number of URLs, the number of unhandled URLs, and the number of URLs with a specific nlp_full_lang 
     for all queries of a given language and search type.
     """
     if "_selenium" in search_type:
@@ -662,7 +649,7 @@ def get_url_counts_by_type(lang, search_type):
                 COUNT(*) as total_count,
                 SUM(CASE WHEN u.downloaded = 0 THEN 1 ELSE 0 END) as undownloaded_count,
                 SUM(CASE WHEN u.handled = 0 THEN 1 ELSE 0 END) as unhandled_count,
-                SUM(CASE WHEN u.full_lang = ? THEN 1 ELSE 0 END) as full_lang_count
+                SUM(CASE WHEN u.nlp_full_lang = ? THEN 1 ELSE 0 END) as full_lang_count
             FROM queries q
             JOIN urls u on q.id = u.query_id
             WHERE q.lang = ? AND u.type = ?
@@ -705,7 +692,7 @@ def get_top_queries_with_most_urls(lang):
     with get_cursor() as cursor:
         cursor.execute("""
             SELECT q.query, q.type, COUNT(u.id) as total_count, 
-                   SUM(CASE WHEN u.full_lang = ? THEN 1 ELSE 0 END) as lang_count
+                   SUM(CASE WHEN u.nlp_full_lang = ? THEN 1 ELSE 0 END) as lang_count
             FROM queries q
             JOIN urls u ON q.id = u.query_id
             GROUP BY q.query
@@ -765,7 +752,7 @@ def count_query_types_by_total_urls(lang):
         cursor.execute("""
             SELECT q.type,
                    COUNT(u.id) as total_url_count,
-                   SUM(CASE WHEN u.full_lang = ? THEN 1 ELSE 0 END) as total_url_with_lang_count
+                   SUM(CASE WHEN u.nlp_full_lang = ? THEN 1 ELSE 0 END) as total_url_with_lang_count
             FROM queries q
             LEFT JOIN urls u ON q.id = u.query_id
             GROUP BY q.type
@@ -777,7 +764,7 @@ def get_domain_counts(lang):
     """Returns the count of unique domains with their totals for a language."""
     with get_cursor() as cursor:
         cursor.execute("""
-            SELECT url, full_lang
+            SELECT url, nlp_full_lang
             FROM urls
         """)
         urls = cursor.fetchall()
@@ -814,7 +801,7 @@ def count_urls_by_confidence_and_paragraph_percentage_ranges(lang):
             cursor.execute("""
                 SELECT COUNT(*) 
                 FROM urls
-                WHERE full_lang = ? AND confidence >= ? AND confidence < ?
+                WHERE nlp_full_lang = ? AND nlp_full_confidence >= ? AND nlp_full_confidence < ?
             """, (lang, lower, upper_bound))
             count = cursor.fetchone()[0]
             range_key = f'{lower}-{upper_bound}'
@@ -824,7 +811,7 @@ def count_urls_by_confidence_and_paragraph_percentage_ranges(lang):
         cursor.execute("""
             SELECT COUNT(*)
             FROM urls
-            WHERE full_lang = ? AND confidence = 1.0
+            WHERE nlp_full_lang = ? AND nlp_full_confidence = 1.0
         """, (lang,))
         count_1 = cursor.fetchone()[0]
         results['confidence']['1.0'] = count_1
@@ -835,7 +822,7 @@ def count_urls_by_confidence_and_paragraph_percentage_ranges(lang):
             cursor.execute("""
                 SELECT COUNT(*) 
                 FROM urls
-                WHERE full_lang = ? AND paragraph_lang >= ? AND paragraph_lang < ?
+                WHERE nlp_full_lang = ? AND nlp_para_perc_lrl >= ? AND nlp_para_perc_lrl < ?
             """, (lang, lower, upper_bound))
             count = cursor.fetchone()[0]
             range_key = f'{lower}-{upper_bound}%'
@@ -845,7 +832,7 @@ def count_urls_by_confidence_and_paragraph_percentage_ranges(lang):
         cursor.execute("""
             SELECT COUNT(*)
             FROM urls
-            WHERE full_lang = ? AND paragraph_lang = 100
+            WHERE nlp_full_lang = ? AND nlp_para_perc_lrl = 100
         """, (lang,))
         count_100 = cursor.fetchone()[0]
         results['paragraph']['100%'] = count_100

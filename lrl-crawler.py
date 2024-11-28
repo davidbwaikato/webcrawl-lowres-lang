@@ -76,14 +76,11 @@ def get_args():
     parser.add_argument("-np", "--num_pages", type=int, default=globals.config['num_pages'],
                         help=f"number of pages of search results to process (x 4, for each query type) [Config Default={globals.config['num_pages']}]")
 
-    parser.add_argument("-uh", "--unhandled", action="store_true",
-                        default=False, help="flag to reprocess unhandled queries or urls")
-
     parser.add_argument("-ra", "--run_all", action="store_true",
                         default=False, help="flag to run all stages: query generation, perform web searches, download result sets, and run NLP over the downloaded files")
     parser.add_argument("-rqg", "--run_querygen", action="store_true",
                         default=False, help="flag to run the create query stage")
-    parser.add_argument("-rs", "--run_search", action="store_true",
+    parser.add_argument("-rws", "--run_websearch", action="store_true",
                         default=False, help="flag to run the search queries stage")
     parser.add_argument("-rd", "--run_download", action="store_true",
                         default=False, help="flag to run the download stage")
@@ -94,11 +91,11 @@ def get_args():
                         default=False, help="flag to show details")
 
     parser.add_argument("-squ", "--set_queries_unhandled", action="store_true",
-                        default=False, help="Flag to set all queries as unhandled")
-#    parser.add_argument("-cu", "--clean_urls", action="store_true",
-#                        default=False, help="Testing flag")
-#    parser.add_argument("-test", "--test", action="store_true",
-#                        default=False, help="Testing flag")
+                        default=False, help="Flag to mark all generated queries in the database as unhandled")
+    parser.add_argument("-sdu", "--set_downloads_unhandled", action="store_true",
+                        default=False, help="Flag to mark all urls in the database as not downloaded")
+    parser.add_argument("-snu", "--set_nlp_unhandled", action="store_true",
+                        default=False, help="Flag to mark all urls in the database as not nlp-processed")
 
     # Positional argument
     parser.add_argument("lang",
@@ -106,14 +103,6 @@ def get_args():
     
     return parser.parse_args()
 
-
-def delete_file(path):
-    try:
-        os.remove(path)
-    except FileNotFoundError:
-        print(f"File not found: {path}")
-    except Exception as e:
-        print(f"Error deleting file: {e}")
 
 
 def set_nlp_values_from_existing(url_id, file_hash):
@@ -177,7 +166,7 @@ def get_download_filename(downloads_dir,filehash,doctype):
     return full_filename
     
 
-def download_and_save(url_id, url, download_with_selenium,apply_robots_txt, save_dir, url_timeout=10):
+def download_and_save(url_id, url, download_with_selenium,apply_robots_txt, downloads_dir, url_timeout=10):
 
     try:
         # Extract root domain from URL
@@ -255,9 +244,10 @@ def download_and_save(url_id, url, download_with_selenium,apply_robots_txt, save
         sha256_hash.update(response_content)
         file_hash = sha256_hash.hexdigest()
 
-        filepath = get_download_filename(save_dir,file_hash,doc_type)
+        filepath = get_download_filename(downloads_dir,file_hash,doc_type)
+        rejected_filepath = get_download_filename(downloads_dir,f"REJECTED-{file_hash}",doc_type)
 
-        if not os.path.exists(filepath):
+        if not os.path.exists(filepath) or os.path.exists(rejected_filepath):
                     
             #print("----")
             #print(f"filepath = {filepath}")
@@ -367,6 +357,7 @@ def download_worker(sub_urls, download_with_selenium,apply_robots_txt, tcount):
             # Check if the stop event is set
             if stop_event.is_set():
                 return
+            
             result = download_and_save(url_id, url_href, download_with_selenium,apply_robots_txt,
                                        globals.config['downloads_dir'], globals.config['url_timeout'])
             if result == 1:
@@ -398,8 +389,18 @@ def download_worker(sub_urls, download_with_selenium,apply_robots_txt, tcount):
                 print(traceback.format_exc())
 
 
-        
-def nlp_worker(sub_urls, detect_name:Language,save_dir, tcount):
+def nlp_reject_downloaded_file(url_id,downloads_dir,url_filehash,url_doctype,reason):
+    sql.set_url_as_handled(url_id)
+    url_filepath_downloaded = get_download_filename(downloads_dir,url_filehash,url_doctype)
+    url_filepath_rejected = get_download_filename(downloads_dir,f"REJECTED-{url_filehash}",url_doctype)
+    print(f"Thread {tcount} xxxxxxxxxxxx rejecting ({reason}) xxxxxxxxxxxx")
+    #delete_file(url_filepath)
+    utils.move_file(url_filepath_downloaded,url_filepath_rejected)
+    
+def nlp_worker(sub_urls, detect_name, tcount):
+
+    downloads_dir = globals.config['downloads_dir']
+    
     for url in sub_urls:
 
         url_id         = url[0]
@@ -415,8 +416,14 @@ def nlp_worker(sub_urls, detect_name:Language,save_dir, tcount):
             print(f"Thread {tcount}: Skipping as already NLP-processed (handled) URL {url_href}")
             continue
 
-        url_filepath = get_download_filename(save_dir,url_filehash,url_doctype)
-                
+        url_filepath = get_download_filename(downloads_dir,url_filehash,url_doctype)
+        rejected_url_filepath = get_download_filename(downloads_dir,f"REJECTED-{url_filehash}",url_doctype)
+
+        if (os.path.exists(rejected_url_filepath)):
+            # It's been processed on a previous run, but this run with different config NLP settings
+            # might lead to a different outcome
+            utils.move_file(rejected_url_filepath,url_filepath)
+            
         now = datetime.now()
         print(f"Thread {tcount} ============ NLP Stage @ {now.strftime('%H:%M:%S')} ============ URL id {url_id}")
         try:
@@ -424,6 +431,9 @@ def nlp_worker(sub_urls, detect_name:Language,save_dir, tcount):
             if stop_event.is_set():
                 return
 
+            print(f"  NLP being applied to url_id={url_id} filehash={url_filehash}")
+            print(f"  url={url_href}")
+            
             if set_nlp_values_from_existing(url_id, url_filehash) == 1:
                 # Found another entry in the database that:
                 #   (i) has the same file_hash but a differnt url_id, and
@@ -435,29 +445,52 @@ def nlp_worker(sub_urls, detect_name:Language,save_dir, tcount):
             
             extracted_text = nlp.extract_text_from_file(url_filepath, url_doctype)
             if extracted_text == None:
-                sql.set_url_as_handled(url_id)
-                print(f"Thread {tcount} xxxxxxxxxxxx deleting (no extracted text) xxxxxxxxxxxx")
-                delete_file(url_filepath)                
+                nlp_reject_downloaded_file(url_id,downloads_dir,url_filehash,url_doctype,"no extracted text")
+                #sql.set_url_as_handled(url_id)
+                #print(f"Thread {tcount} xxxxxxxxxxxx deleting (no extracted text) xxxxxxxxxxxx")
+                #delete_file(url_filepath)                
                 continue
             cleaned_extracted_text = nlp.clean_text(extracted_text)
             # Guard against the cleaned text now being nothing but 100% whitespace
             if cleaned_extracted_text.isspace():
-                sql.set_url_as_handled(url_id)
-                print(f"Thread {tcount} xxxxxxxxxxxx deleting (text all whitespace) xxxxxxxxxxxx")
-                delete_file(url_filepath)                                
+                nlp_reject_downloaded_file(url_id,downloads_dir,url_filehash,url_doctype,"text all whitespace")
+                #sql.set_url_as_handled(url_id)
+                #print(f"Thread {tcount} xxxxxxxxxxxx deleting (text all whitespace) xxxxxxxxxxxx")
+                #delete_file(url_filepath)                                
                 continue            
 
             langs = nlp.run_nlp_algorithms(cleaned_extracted_text, globals.lang_uc)
-            if langs["lingua"]["lang"] == None:
-                sql.set_url_as_handled(url_id)
-                print(f"Thread {tcount} xxxxxxxxxxxx deleting (NLP failed to detect language) xxxxxxxxxxxx")
-                delete_file(url_filepath)                                
+            if langs["lingua"]["full_lang"] == None:
+                nlp_reject_downloaded_file(url_id,downloads_dir,url_filehash,url_doctype,"NLP failed to detect language")
+                #sql.set_url_as_handled(url_id)
+                #print(f"Thread {tcount} xxxxxxxxxxxx deleting (NLP failed to detect language) xxxxxxxxxxxx")
+                #delete_file(url_filepath)                                
                 continue
-            if langs["lingua"]["lang"] != detect_name:
-                print(f"Thread {tcount} xxxxxxxxxxxx deleting (detected {langs['lingua']['lang'].capitalize()} != {detect_name.capitalize()}) xxxxxxxxxxxx")
-                delete_file(url_filepath)
-                
-            sql.update_url_langinfo(url_id, langs["lingua"]["lang"], langs["lingua"]["confidence"], langs["lingua"]["percentage"])
+
+            # If reached this point, then NLP has made a language prediction (full page and per para)
+            # => Store answer in database
+
+            nlp_fulllang       = langs["lingua"]["full_lang"]
+            nlp_fullconf       = langs["lingua"]["full_conf"]
+            nlp_para_count     = langs["lingua"]["para_count"]
+            nlp_para_count_lrl = langs["lingua"]["para_count_lrl"]
+            nlp_para_perc_lrl  = langs["lingua"]["para_perc_lrl"] 
+
+            sql.update_url_langinfo(url_id, nlp_fulllang, nlp_fullconf,
+                                    nlp_para_count_lrl, nlp_para_count, nlp_para_perc_lrl)
+            
+            # We are interested in downloaded files that have at least one para of our low-resource-lang
+            # => if not, then rename downloaded file to rejected
+
+            # Previous test from Sulhan
+            #if langs["lingua"]["full_lang"] != detect_name:
+            #    nlp_reject_downloaded_file(url_id,downloads_dir,url_filehash,url_doctype,
+            #                               f"detected {langs['lingua']['full_lang'].capitalize()} != {detect_name.capitalize()}")
+            
+            if nlp_para_count_lrl == 0:
+                # No lrl language text                
+                nlp_reject_downloaded_file(url_id,downloads_dir,url_filehash,url_doctype,
+                                           f"NLP did not detected any paragraphs in {detect_name.capitalize()} language")            
             # print("{0} {1} {2} HANDLED".format(tcount, url_id, @ now.strftime('%H:%M:%S')))
 
         except FileNotFoundError as e:
@@ -494,45 +527,6 @@ def validate_args(args):
         exit(0)
 
 
-#def clean_urls(urls):
-#    for url in urls:
-#        if 'bing.com' in url[3]:
-#            query_params = parse_qs(urlparse(url[3]).query)
-#            if 'u' in query_params:
-#                encoded_url = query_params['u'][0]
-#                try:
-#                    temp = "{0}{1}".format(encoded_url[2:], "==")
-#                    final_url = base64.b64decode(temp).decode("utf-8")
-#                    print("Saving {0}".format(url[0]))
-#                    sql.save_bing_url(url[0], final_url)
-#                except Exception:
-#                    continue
-
-# def test():
-#     num_files = 100
-#     source_dir = 'downloads'
-#     destination_dir = 'test'
-#     # Ensure the destination directory exists
-#     if not os.path.exists(destination_dir):
-#         os.makedirs(destination_dir)
-#     # Get a list of all files in the source directory
-#     all_files = [f for f in os.listdir(source_dir) if os.path.isfile(os.path.join(source_dir, f))]
-#     # Initialize an empty list to keep track of files copied
-#     copied_files = []
-#     while len(copied_files) < num_files and all_files:
-#         # Randomly select a file
-#         file_to_copy = random.choice(all_files)
-#         all_files.remove(file_to_copy)
-#         # Construct full file path
-#         source_file_path = os.path.join(source_dir, file_to_copy)
-#         destination_file_path = os.path.join(destination_dir, file_to_copy)
-#         # If the file does not exist in the destination directory, copy it
-#         if not os.path.exists(destination_file_path):
-#             shutil.copy(source_file_path, destination_file_path)
-#             copied_files.append(file_to_copy)
-#     print(f"Copied {len(copied_files)} files from {source_dir} to {destination_dir}.")
-#     exit(0)
-
 if __name__ == "__main__":
     globals.config = utils.read_config()
     globals.args = get_args()
@@ -547,19 +541,20 @@ if __name__ == "__main__":
     
     globals.verbose = globals.args.verbose
     
-#    if globals.args.test:
-#        test()
-
     if globals.args.set_queries_unhandled:
         sql.set_all_queries_unhandled()
-        print("Set all queries as unhandled.")
+        print("Marked all generated queries as unhandled.")
+        exit(0)
 
-#    if globals.args.clean_urls:
-#        print("Cleaning URLs in database (this might take a while).")
-#        urls = sql.get_all_urls()
-#        final_urls = clean_urls(urls)
-#        print("Finished cleaning URLs in database.")
-#        exit(0)
+    if globals.args.set_downloads_unhandled:
+        sql.set_all_urls_undownloaded()
+        print("Marked all URL downloads as unhandled.")
+        exit(0)
+
+    if globals.args.set_nlp_unhandled:
+        sql.set_all_urls_unhandled()
+        print("Marked al URLs NLP application as unhandled.")
+        exit(0)
         
     try:
 
@@ -574,8 +569,9 @@ if __name__ == "__main__":
         num_threads   = globals.args.num_threads
         num_pages     = globals.args.num_pages
 
-        # Only controlable from the commandline
-        unhandled_flag = globals.args.unhandled
+        # **** XXXX
+        ## Only controlable from the commandline
+        #unhandled_flag = globals.args.unhandled
 
         # Ensure the downloads directory exists
         downloads_dir = globals.config.get('downloads_dir')
@@ -599,13 +595,12 @@ if __name__ == "__main__":
             queries = queries.generate_all(lang_uc, word_count, query_count)
             
         # Search
-        if globals.args.run_search or globals.args.run_all:
+        if globals.args.run_websearch or globals.args.run_all:
             print("Running Search.")
             # Get all relevant queries from the database
             queries = sql.get_all_queries(lang_uc, handled=False)
             # Split queries into sub-lists for each thread
-            split_queries = [queries[i::num_threads]
-                             for i in range(num_threads)]
+            split_queries = [queries[i::num_threads] for i in range(num_threads)]
             # Create and start threads
             threads = []
             print("Starting search threads.")
@@ -636,8 +631,7 @@ if __name__ == "__main__":
             urls = sql.get_all_urls_filter_downloaded(downloaded=False)
             print(f"Number of urls to be downloaded: {len(urls)}")
             # Split queries into sub-lists for each thread
-            split_urls = [urls[i::num_threads]
-                             for i in range(num_threads)]
+            split_urls = [urls[i::num_threads] for i in range(num_threads)]
 
             # Create and start threads
             threads = []
@@ -663,16 +657,14 @@ if __name__ == "__main__":
             urls = sql.get_all_urls_filter_downloaded_handled(downloaded=True,handled=False) 
             print(f"Number of urls to be processed by NLP: {len(urls)}")
             # Split queries into sub-lists for each thread
-            split_urls = [urls[i::num_threads]
-                             for i in range(num_threads)]
+            split_urls = [urls[i::num_threads] for i in range(num_threads)]
 
             # Create and start threads
             threads = []
             print("Starting nlp threads.")
             tcount = 1
             for sub_urls in split_urls:
-                t = threading.Thread(target=nlp_worker, args=(
-                    sub_urls, globals.lang_uc,globals.config['downloads_dir'], tcount))
+                t = threading.Thread(target=nlp_worker, args=(sub_urls, globals.lang_uc, tcount))
                 threads.append(t)
                 t.start()
                 tcount += 1
