@@ -2,7 +2,7 @@
 
 #	   --apply_robots_txt \
     
-rm -rf querydownload.db downloads \
+rm -rf querydownload-maori.db downloads-maori \
     && ./lrl-crawler.py \
 			--run_all \
 			--query_count 1 \

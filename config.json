@@ -1,6 +1,6 @@
 {
-    "downloads_dir" : "downloads",
-    "database_file" : "querydownloads.db",
+    "downloads_dir_root" : "downloads",
+    "database_file_root" : "querydownloads",
     
     // If working with either the Google or Bing Search API, then add your key/credentials here
     "google": {

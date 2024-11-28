@@ -1,6 +1,6 @@
 #!/bin/bash -x
 
-rm -rf querydownload.db downloads \
+rm -rf querydownload-downloads.db downloads-maori \
     && ./lrl-crawler.py \
 			--run_all \
 			--query_count 1 \
@@ -8,4 +8,4 @@ rm -rf querydownload.db downloads \
 			--download_with_selenium \
 			--num_threads 4 --num_pages 1 \
 			$@ \
-			MAORI
+			maori

@@ -540,6 +540,9 @@ if __name__ == "__main__":
     globals.lang_uc = lang_uc
     
     globals.verbose = globals.args.verbose
+
+    globals.config['downloads_dir'] = globals.config['downloads_dir_root'] + "-" + lang_lc
+    globals.config['database_file'] = globals.config['database_file_root'] + "-" + lang_lc + ".db"
     
     if globals.args.set_queries_unhandled:
         sql.set_all_queries_unhandled()
