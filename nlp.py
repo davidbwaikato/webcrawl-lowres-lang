@@ -38,7 +38,7 @@ def extract_text_from_file(filepath, doc_type):
     if doc_type == "html":
         with open(filepath, 'r', encoding='utf-8') as f:
             soup = BeautifulSoup(f, 'html.parser')
-            return soup.get_text()
+            return soup.get_text(separator=" ")
     elif doc_type == "pdf":
         with open(filepath, 'rb') as f:
             reader = PyPDF2.PdfReader(f)
@@ -56,20 +56,26 @@ def extract_text_from_file(filepath, doc_type):
 def convert_text_to_parachunks(text, min_para_word_len):
     """Gets optimal sized chunks to run paragraph language detection for"""
 
-    if (globals.verbose > 1):
+    if (globals.verbose >= 3):
         verbose_char_len = globals.verbose*100
-        print(f"---- process_text_in_chunks() text[:{verbose_char_len}]----")
+        print(f"++++ process_text_in_chunks() text[:{verbose_char_len}] ++++")
         print(text[:verbose_char_len])
-        print("----")
+        print("++++")
 
     cleaned_text = clean_text(text, r'\n{2,}','\n')    
     paras = cleaned_text.splitlines()
 
+    # **** XXXX debugging
+    #print(f"++++ CLEAN process_text_in_chunks() paras[:6] ++++")
+    #print(paras[:6])
+    
     para_chunks = []
     
     para_cat = ""
 
     for para in paras:
+        if para.isspace():
+            continue
         para_cat = para_cat + para + '\n'
         para_cat_words = para_cat.split()
         if (len(para_cat_words) > min_para_word_len):
@@ -118,10 +124,10 @@ def convert_text_to_parachunks(text, min_para_word_len):
 def process_text_in_chunksDEPRECATED(text, detect:Language):
     """Gets an optimal chunk size to run paragraph language detection for"""
 
-    if (globals.verbose > 1):
-        print("---- process_text_in_chunks() ----")
+    if (globals.verbose >= 3):
+        print("++++ process_text_in_chunks() ++++")
         print(text[:globals.verbose*100])
-        print("----")
+        print("++++")
         
     words = text.split()
     num_words = len(words)
@@ -161,23 +167,26 @@ def detect_para_language_lingua(text, detect_langname):
     
     # Process each chunk and count paragraphs
     num_para_chunks = len(para_chunks)
-    lrl_lang_match_count = 0
 
+    lrl_match_count = 0
+    lrl_match_paras = []
+    
     for para_chunk in para_chunks:
         lingua_paralang_rec = detector.detect_language_of(para_chunk)
         lingua_para_confidence = detector.compute_language_confidence(para_chunk, lingua_paralang_rec)
 
-        if (globals.verbose > 2):
-            print(f"    Para chunk:\n--\n{para_chunk}\n--")
+        if (globals.verbose >= 2):
+            print(f"----\n    Para chunk:\n----\n{para_chunk}----\n")
         if (globals.verbose > 1):
-            print(f"    Para chunk Predicted language = {lingua_paralang_rec.name} (confidence={lingua_para_confidence})\n")
+            print(f"    Para chunk Predicted language = {lingua_paralang_rec.name} (confidence={lingua_para_confidence})\n====")
     
         if lingua_paralang_rec.name == detect_langname and lingua_para_confidence >= min_para_confidence:
-            lrl_lang_match_count += 1
+            lrl_match_count += 1
+            lrl_match_paras.append(para_chunk)
 
-    print(f"  Para Chunks: lrl_lang_match_count={lrl_lang_match_count} out of {num_para_chunks}")
+    print(f"  Para Chunks: lrl_match_count={lrl_match_count} out of {num_para_chunks}")
     
-    return lrl_lang_match_count, num_para_chunks 
+    return num_para_chunks, lrl_match_count, lrl_match_paras
 
 
 
@@ -194,14 +203,14 @@ def detect_language_lingua(text,  detect_langname):
         
     # Paragraph-level analysis    
 
-    lrl_lang_match_count,num_para_chunks = detect_para_language_lingua(text,detect_langname)    
-    lrl_para_percentage = (lrl_lang_match_count / num_para_chunks) * 100 if num_para_chunks > 0 else 0
+    num_para_chunks,lrl_match_count,lrl_paras_unused = detect_para_language_lingua(text,detect_langname)
+    lrl_para_percentage = (lrl_match_count / num_para_chunks) * 100 if num_para_chunks > 0 else 0
       
     return {
         "full_lang": predicted_full_langname,
         "full_conf": round(lingua_fullconf, 2),
         "para_count": num_para_chunks,
-        "para_count_lrl": lrl_lang_match_count,
+        "para_count_lrl": lrl_match_count,
         "para_perc_lrl":  round(lrl_para_percentage, 2)
     }
 

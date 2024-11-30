@@ -18,16 +18,16 @@ def delete_file(path):
         print(f"Error deleting file: {e}")
         
 
-# def read_file(filename):
-#     """Read file in UTF-8 format"""
-#     with open(filename, 'r', encoding='utf-8') as f:
-#         return f.read().splitlines()
+def read_file(filename):
+    """Read file in UTF-8 format"""
+    with open(filename, 'r', encoding='utf-8') as f:
+        return f.read().splitlines()
 
 
-# def add_to_file(filename, text):
-#     """Add to file in UTF-8 format"""
-#     with open(filename, 'a', encoding='utf-8') as f:
-#         f.write(text)
+def add_to_file(filename, text):
+    """Add/Append to file in UTF-8 format"""
+    with open(filename, 'a', encoding='utf-8') as f:
+        f.write(text)
 
 
 def read_config():
@@ -44,10 +44,10 @@ def save_to_json(data, filename):
     return filename
 
 
-# def read_json(filename):
-#     """Read data from a JSON file"""
-#     with open(filename, 'r', encoding="utf-8") as file:
-#         return jsonc.load(file)
+def read_json(filename):
+    """Read data from a JSON file"""
+    with open(filename, 'r', encoding="utf-8") as file:
+        return jsonc.load(file)
 
 
 def hash_url(url):
@@ -60,46 +60,11 @@ def remove_blacklisted(urls, blacklist):
     return [url for url in urls if not any(domain in url for domain in blacklist)]
 
 
-# def initialize_query(query_dict):
-#     """Initialize JSON structure for a query and save it to a file"""
-#     # Extract the query and its type from the dictionary
-#     query = query_dict["query"]
-#     query_type = query_dict["type"]
-#     # File name is the query with spaces replaced by underscores
-#     filename = f"queries/{query.replace(' ', '_')}.json"
-#     # If file already exists, don't create a new one
-#     if os.path.exists(filename):
-#         return 0
-#     data = {
-#         QUERY: query,
-#         TYPE: query_type,
-#         TOTAL: 0,
-#         MAORI: 0,
-#         UNHANDLED: 0,
-#         GOOGLE: {
-#             TOTAL: 0,
-#             MAORI: 0,
-#             UNHANDLED: 0,
-#             ITEMS: []
-#         },
-#         GOOGLE_API: {
-#             TOTAL: 0,
-#             MAORI: 0,
-#             UNHANDLED: 0,
-#             ITEMS: []
-#         },
-#         BING: {
-#             TOTAL: 0,
-#             MAORI: 0,
-#             UNHANDLED: 0,
-#             ITEMS: []
-#         },
-#         BING_API: {
-#             TOTAL: 0,
-#             MAORI: 0,
-#             UNHANDLED: 0,
-#             ITEMS: []
-#         }
-#     }
-#     save_to_json(data, filename)
-#     return 1
+def get_download_filename_pair(downloads_dir,filehash,doctype):
+    filename = filehash + "." + doctype
+    full_filename = os.path.join(downloads_dir, filename)
+
+    rejected_filename =f"REJECTED-{filehash}.{doctype}"
+    full_rejected_filename = os.path.join(downloads_dir, rejected_filename)
+    
+    return full_filename,rejected_filename

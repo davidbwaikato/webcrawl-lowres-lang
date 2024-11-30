@@ -159,11 +159,12 @@ def init_driver(driver_name):
     
     return driver
 
-def get_download_filename(downloads_dir,filehash,doctype):
-    filename = filehash + "." + doctype
-    full_filename = os.path.join(downloads_dir, filename)
-
-    return full_filename
+# **** XXXX
+#def get_download_filename(downloads_dir,filehash,doctype):
+#    filename = filehash + "." + doctype
+#    full_filename = os.path.join(downloads_dir, filename)
+#
+#    return full_filename
     
 
 def download_and_save(url_id, url, download_with_selenium,apply_robots_txt, downloads_dir, url_timeout=10):
@@ -244,8 +245,7 @@ def download_and_save(url_id, url, download_with_selenium,apply_robots_txt, down
         sha256_hash.update(response_content)
         file_hash = sha256_hash.hexdigest()
 
-        filepath = get_download_filename(downloads_dir,file_hash,doc_type)
-        rejected_filepath = get_download_filename(downloads_dir,f"REJECTED-{file_hash}",doc_type)
+        filepath,rejected_filepath = utils.get_download_filename_pair(downloads_dir,file_hash,doc_type)
 
         if not os.path.exists(filepath) or os.path.exists(rejected_filepath):
                     
@@ -391,10 +391,8 @@ def download_worker(sub_urls, download_with_selenium,apply_robots_txt, tcount):
 
 def nlp_reject_downloaded_file(url_id,downloads_dir,url_filehash,url_doctype,reason):
     sql.set_url_as_handled(url_id)
-    url_filepath_downloaded = get_download_filename(downloads_dir,url_filehash,url_doctype)
-    url_filepath_rejected = get_download_filename(downloads_dir,f"REJECTED-{url_filehash}",url_doctype)
+    url_filepath_downloaded,url_filepath_rejected = utils.get_download_filename_pair(downloads_dir,url_filehash,url_doctype)
     print(f"Thread {tcount} xxxxxxxxxxxx rejecting ({reason}) xxxxxxxxxxxx")
-    #delete_file(url_filepath)
     utils.move_file(url_filepath_downloaded,url_filepath_rejected)
     
 def nlp_worker(sub_urls, detect_name, tcount):
@@ -416,8 +414,7 @@ def nlp_worker(sub_urls, detect_name, tcount):
             print(f"Thread {tcount}: Skipping as already NLP-processed (handled) URL {url_href}")
             continue
 
-        url_filepath = get_download_filename(downloads_dir,url_filehash,url_doctype)
-        rejected_url_filepath = get_download_filename(downloads_dir,f"REJECTED-{url_filehash}",url_doctype)
+        url_filepath,rejected_url_filepath = utils.get_download_filename_pair(downloads_dir,url_filehash,url_doctype)
 
         if (os.path.exists(rejected_url_filepath)):
             # It's been processed on a previous run, but this run with different config NLP settings
