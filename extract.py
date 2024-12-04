@@ -31,10 +31,34 @@ def extract_pdf(path):
         exit(1)
 
 
-def preprocess_text_into_words(text):
-    """Tokenize the content"""
-    #return re.findall(r'\b\w+\b', text.lower())
-    return re.findall(r'\b\w+\b', text)
+def preprocess_text_into_unigram_words(text):
+    """Tokenize the content into unigrams"""
+    #return re.findall(r'\b\w+\b', text)
+
+    text_without_punc = re.sub(r'[^\w\s]',' ',text)    
+    unigrams = text_without_punc.split()
+    return unigrams
+
+
+def preprocess_text_into_bigram_words(text):
+    """Tokenize the content into bigrams"""
+    #re.findall(r'\b\w+\b\s*\w+\b', text)
+
+    text_without_punc = re.sub(r'[^\w\s]',' ',text)    
+    words = text_without_punc.split()
+
+    bigrams = []
+    word1 = words.pop()
+    
+    for word in words:
+        word2 = word
+        bigram_word = word1 + " " + word2
+
+        bigrams.append(bigram_word)
+        word1 = word2
+
+
+    return bigrams
 
 
 def filter_words(words, min_char_len=3):
@@ -44,11 +68,8 @@ def filter_words(words, min_char_len=3):
 
     return filtered_lc_words
     
-def get_common_words(tokens, min_length=3):
+def get_token_frequencies(tokens):
     """Filter out words based on length and get all words"""
-
-    # Also removes any digits
-    # filtered_tokens = [word for word in tokens if len(word) >= min_length and not any(char.isdigit() for char in word)]
 
     word_freq = collections.Counter(tokens)
     most_common = word_freq.most_common() # returns all frequency counts if no int-param passed in
@@ -71,13 +92,6 @@ def extract_udhr(lang_initialcap,force=False):
 
         print(f"Processing langauge: {config_language}")
 
-        # Check if file exists and act according to `force` parameter
-        filename = f"dicts/common_words_{config_language.lower()}.json"
-        #if os.path.exists(filename):
-        #    print(f"  Skipping generating output file '{filename}' as this already exists.")
-        #    print(f"  To regenerate/update this file, remove this file before running the script, or use -force to overwrite.")
-        #    continue
-
         file_path = item['path']
         if file_path.endswith('.pdf'):
             text = extract_pdf(file_path)
@@ -87,18 +101,40 @@ def extract_udhr(lang_initialcap,force=False):
             print(f"Error: Unsupported file type for {file_path}. Only pdf and txt files are supported.",file=sys.stderr)
             exit(1)
 
-        words = preprocess_text_into_words(text)
-        tokens = filter_words(words,min_char_len=3)
-        common_words = get_common_words(tokens)
-
+        unigram_words = preprocess_text_into_unigram_words(text)
+        unigram_tokens = filter_words(unigram_words,min_char_len=3)
+        unigram_word_freq = get_token_frequencies(unigram_tokens)
+        unigram_word_freq_dict = dict(unigram_word_freq)
+        
+        bigram_words = preprocess_text_into_bigram_words(text)
+        bigram_tokens = filter_words(bigram_words,min_char_len=3)
+        bigram_word_freq = get_token_frequencies(bigram_tokens)
+        bigram_word_freq_dict = dict(bigram_word_freq)
+        
+        unigram_ofilename = f"dicts/unigram_words_{config_language.lower()}.json"
+        bigram_ofilename = f"dicts/bigram_words_{config_language.lower()}.json"
+        
         if (verbose>1):
-            print(json.dump(dict(common_words), fp=sys.stdout, ensure_ascii=False, indent=4))
+            print(f"====")
+            print(f"Unigram Word Frequencies for {lang_initialcap}")
+            print(f"====")
+            print(json.dump(unigram_word_freq_dict, fp=sys.stdout, ensure_ascii=False, indent=4))
+            print(f"====")
+            print(f"Bigram Word Frequencies for {lang_initialcap}")
+            print(f"====")
+            print(json.dump(bigram_word_freq_dict, fp=sys.stdout, ensure_ascii=False, indent=4))
             
         # Check if file exists and act according to `force` parameter
-        if not os.path.exists(filename) or force:
-            utils.save_to_json(dict(common_words), filename)
+        if not os.path.exists(unigram_ofilename) or force:
+            utils.save_to_json(dict(unigram_word_freq), unigram_ofilename)
         else:
-            print(f"  Output file '{filename}' already exists.")
+            print(f"  Output file '{unigram_ofilename}' already exists.")
+            print(f"  To regenerate/update this file, remove this file first before running the script, or use -force to overwrite.")
+
+        if not os.path.exists(bigram_ofilename) or force:
+            utils.save_to_json(bigram_word_freq_dict, bigram_ofilename)
+        else:
+            print(f"  Output file '{bigram_ofilename}' already exists.")
             print(f"  To regenerate/update this file, remove this file first before running the script, or use -force to overwrite.")
             
 def get_lang_paragraphs(urls,lang_uc):
@@ -146,18 +182,15 @@ def extract_dict(lang_initialcap,force=False):
 
         # Check if file exists and act according to `force` parameter
         filename = f"dicts/common_words_{config_language.lower()}.json"
-#        if os.path.exists(filename):
-#            print(f"  Skipping generating output file '{filename}' as this already exists.")
-#            print(f"  To regenerate/update this file, remove this file before running the script, or use -force to overwrite.")
-#            continue
 
         urls = sql.get_all_urls_filter_downloaded_handled(downloaded=True, handled=True)
         lang_all_paras = get_lang_paragraphs(urls,lang_uc)
 
         text = "\n".join(lang_all_paras)
-        words = preprocess_text_into_words(text)
+        words = preprocess_text_into_unigram_words(text)
         tokens = filter_words(words,min_char_len=3)        
-        common_words = get_common_words(tokens)
+
+        common_words = get_token_frequencies(tokens)
         
         if (verbose>1):
             print(json.dump(dict(common_words), fp=sys.stdout, ensure_ascii=False, indent=4))

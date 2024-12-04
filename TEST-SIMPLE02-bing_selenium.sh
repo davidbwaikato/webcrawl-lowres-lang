@@ -1,6 +1,6 @@
 #!/bin/bash -x
 
-rm -rf querydownload-downloads.db downloads-maori \
+rm -rf querydownloads-maori.db downloads-maori \
     && ./lrl-crawler.py \
 			--run_all \
 			--query_count 1 \
