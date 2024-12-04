@@ -480,53 +480,72 @@ def count_duplicate_file_hashes():
 
     
 # Count of Document Types:
-def count_doc_types_for_language_total(lang):
+def count_doc_types_for_language_total_filterparam(when_str):
     """Returns the count of each document type and the count of each type resulting in a specific language."""
-    with get_cursor() as cursor:
-        cursor.execute("""
-            SELECT doc_type, 
-                   COUNT(*) as total_count, 
-                   SUM(CASE WHEN nlp_full_lang = ? THEN 1 ELSE 0 END) as language_count
-            FROM urls
-            GROUP BY doc_type
-        """, (lang,))
-        result = cursor.fetchall()
-        return [{"doc_type": row[0], "total_count": row[1], "language_count": row[2]} for row in result]
 
-def count_doc_types_for_language_total_lrlparacount():
-    """Returns the count of each document type and the count of each type resulting in a specific language."""
     with get_cursor() as cursor:
-        cursor.execute("""
+        cursor.execute(f"""
             SELECT doc_type, 
                    COUNT(*) as total_count, 
-                   SUM(CASE WHEN nlp_para_count_lrl > 0 THEN 1 ELSE 0 END) as language_count
+                   SUM(CASE WHEN {when_str} THEN 1 ELSE 0 END) as language_count
             FROM urls
             GROUP BY doc_type
         """)
         result = cursor.fetchall()
         return [{"doc_type": row[0], "total_count": row[1], "language_count": row[2]} for row in result]
+
+def count_doc_types_for_language_total(lang):
+    return count_doc_types_for_language_total_filterparam(f"nlp_full_lang = '{lang}'")
+
+    # """Returns the count of each document type and the count of each type resulting in a specific language."""
+    # with get_cursor() as cursor:
+    #     cursor.execute("""
+    #         SELECT doc_type, 
+    #                COUNT(*) as total_count, 
+    #                SUM(CASE WHEN nlp_full_lang = ? THEN 1 ELSE 0 END) as language_count
+    #         FROM urls
+    #         GROUP BY doc_type
+    #     """, (lang,))
+    #     result = cursor.fetchall()
+    #     return [{"doc_type": row[0], "total_count": row[1], "language_count": row[2]} for row in result]
+
+def count_doc_types_for_language_total_lrlparacount():
+    return count_doc_types_for_language_total_filterparam("nlp_para_count_lrl > 0")
+    
+    # """Returns the count of each document type and the count of each type resulting in a specific language."""
+    # with get_cursor() as cursor:
+    #     cursor.execute("""
+    #         SELECT doc_type, 
+    #                COUNT(*) as total_count, 
+    #                SUM(CASE WHEN nlp_para_count_lrl > 0 THEN 1 ELSE 0 END) as language_count
+    #         FROM urls
+    #         GROUP BY doc_type
+    #     """)
+    #     result = cursor.fetchall()
+    #     return [{"doc_type": row[0], "total_count": row[1], "language_count": row[2]} for row in result]
     
 
-# Count URLs with Low Confidence for a Given Language and get top 5 lowest:
-def count_low_confidence_urls(lang, confidence_threshold=0.9):
+def count_low_confidence_urls_filterparam(confidence_threshold, where_str):
+    """Count URLs with Low Confidence for a Given Language and get top 5 lowest"""
+
     with get_cursor() as cursor:
         # Count total URLs with low confidence
-        cursor.execute("""
+        cursor.execute(f"""
             SELECT COUNT(*) as count
             FROM urls
-            WHERE nlp_full_lang = ? AND nlp_full_confidence < ?
-        """, (lang, confidence_threshold))
+            WHERE {where_str} AND nlp_full_confidence < ?
+        """, (confidence_threshold,))
         total_count_row = cursor.fetchone()
         total_count = total_count_row[0] if total_count_row else 0
 
         # Get top 5 URLs with lowest confidence
-        cursor.execute("""
+        cursor.execute(f"""
             SELECT url, nlp_full_confidence
             FROM urls
-            WHERE nlp_full_lang = ? AND nlp_full_confidence < ?
+            WHERE {where_str} AND nlp_full_confidence < ?
             ORDER BY nlp_full_confidence ASC
             LIMIT 5
-        """, (lang, confidence_threshold))
+        """, (confidence_threshold,))
         lowest = cursor.fetchall()
 
         result = {
@@ -534,113 +553,180 @@ def count_low_confidence_urls(lang, confidence_threshold=0.9):
             "top_5_lowest_confidence": lowest
         }
         return result
+    
+# Count URLs with Low Confidence for a Given Language and get top 5 lowest:
+def count_low_confidence_urls(lang, confidence_threshold=0.9):
+    return count_low_confidence_urls_filterparam(confidence_threshold, f"nlp_full_lang = '{lang}'")
 
+    # with get_cursor() as cursor:
+    #     # Count total URLs with low confidence
+    #     cursor.execute("""
+    #         SELECT COUNT(*) as count
+    #         FROM urls
+    #         WHERE nlp_full_lang = ? AND nlp_full_confidence < ?
+    #     """, (lang, confidence_threshold))
+    #     total_count_row = cursor.fetchone()
+    #     total_count = total_count_row[0] if total_count_row else 0
+
+    #     # Get top 5 URLs with lowest confidence
+    #     cursor.execute("""
+    #         SELECT url, nlp_full_confidence
+    #         FROM urls
+    #         WHERE nlp_full_lang = ? AND nlp_full_confidence < ?
+    #         ORDER BY nlp_full_confidence ASC
+    #         LIMIT 5
+    #     """, (lang, confidence_threshold))
+    #     lowest = cursor.fetchall()
+
+    #     result = {
+    #         "total_low_confidence": total_count,
+    #         "top_5_lowest_confidence": lowest
+    #     }
+    #     return result
+
+    
 # Count URLs with Low Confidence for a Given Language and get top 5 lowest:
 def count_low_confidence_urls_lrlparacount(confidence_threshold=0.9):
+    return count_low_confidence_urls_filterparam(confidence_threshold, "nlp_para_count_lrl > 0")
+    
+    # with get_cursor() as cursor:
+    #     # Count total URLs with low confidence
+    #     cursor.execute("""
+    #         SELECT COUNT(*) as count
+    #         FROM urls
+    #         WHERE nlp_para_count_lrl > 0 AND nlp_full_confidence < ?
+    #     """, (confidence_threshold,))
+    #     total_count_row = cursor.fetchone()
+    #     total_count = total_count_row[0] if total_count_row else 0
+
+    #     # Get top 5 URLs with lowest confidence
+    #     cursor.execute("""
+    #         SELECT url, nlp_full_confidence
+    #         FROM urls
+    #         WHERE nlp_para_count_lrl > 0 AND nlp_full_confidence < ?
+    #         ORDER BY nlp_full_confidence ASC
+    #         LIMIT 5
+    #     """, (confidence_threshold,))
+    #     lowest = cursor.fetchall()
+
+    #     result = {
+    #         "total_low_confidence": total_count,
+    #         "top_5_lowest_confidence": lowest
+    #     }
+    #     return result
+
+
+def count_high_confidence_urls_filterparam(confidence_threshold, where_str):
+    """Count URLs with High Confidence for a Given Language and get top 5 highest"""
+    
     with get_cursor() as cursor:
         # Count total URLs with low confidence
-        cursor.execute("""
+        cursor.execute(f"""
             SELECT COUNT(*) as count
             FROM urls
-            WHERE nlp_para_count_lrl > 0 AND nlp_full_confidence < ?
+            WHERE {where_str} AND nlp_full_confidence >= ?
         """, (confidence_threshold,))
         total_count_row = cursor.fetchone()
         total_count = total_count_row[0] if total_count_row else 0
 
-        # Get top 5 URLs with lowest confidence
-        cursor.execute("""
+        # Get top 5 URLs with highest confidence
+        cursor.execute(f"""
             SELECT url, nlp_full_confidence
             FROM urls
-            WHERE nlp_para_count_lrl > 0 AND nlp_full_confidence < ?
-            ORDER BY nlp_full_confidence ASC
+            WHERE {where_str} AND nlp_full_confidence >= ?
+            ORDER BY nlp_full_confidence DESC
             LIMIT 5
         """, (confidence_threshold,))
         lowest = cursor.fetchall()
 
         result = {
-            "total_low_confidence": total_count,
-            "top_5_lowest_confidence": lowest
+            "total_high_confidence": total_count,
+            "top_5_highest_confidence": lowest
         }
         return result
 
     
 # Count URLs with High Confidence for a Given Language and get top 5 highest:
 def count_high_confidence_urls(lang, confidence_threshold=0.9):
-    with get_cursor() as cursor:
-        # Count total URLs with low confidence
-        cursor.execute("""
-            SELECT COUNT(*) as count
-            FROM urls
-            WHERE nlp_full_lang = ? AND nlp_full_confidence >= ?
-        """, (lang, confidence_threshold))
-        total_count_row = cursor.fetchone()
-        total_count = total_count_row[0] if total_count_row else 0
+    return count_high_confidence_urls_filterparam(lang,confidence_threshold, f"nlp_full_lang = '{lang}'")
+    
+    # with get_cursor() as cursor:
+    #     # Count total URLs with low confidence
+    #     cursor.execute("""
+    #         SELECT COUNT(*) as count
+    #         FROM urls
+    #         WHERE nlp_full_lang = ? AND nlp_full_confidence >= ?
+    #     """, (lang, confidence_threshold))
+    #     total_count_row = cursor.fetchone()
+    #     total_count = total_count_row[0] if total_count_row else 0
 
-        # Get top 5 URLs with highest confidence
-        cursor.execute("""
-            SELECT url, nlp_full_confidence
-            FROM urls
-            WHERE nlp_full_lang = ? AND nlp_full_confidence >= ?
-            ORDER BY nlp_full_confidence DESC
-            LIMIT 5
-        """, (lang, confidence_threshold))
-        lowest = cursor.fetchall()
+    #     # Get top 5 URLs with highest confidence
+    #     cursor.execute("""
+    #         SELECT url, nlp_full_confidence
+    #         FROM urls
+    #         WHERE nlp_full_lang = ? AND nlp_full_confidence >= ?
+    #         ORDER BY nlp_full_confidence DESC
+    #         LIMIT 5
+    #     """, (lang, confidence_threshold))
+    #     lowest = cursor.fetchall()
 
-        result = {
-            "total_high_confidence": total_count,
-            "top_5_highest_confidence": lowest
-        }
-        return result
+    #     result = {
+    #         "total_high_confidence": total_count,
+    #         "top_5_highest_confidence": lowest
+    #     }
+    #     return result
 
 # Count URLs with High Confidence for a Given Language and get top 5 highest:
 def count_high_confidence_urls_lrlparacount(confidence_threshold=0.9):
-    with get_cursor() as cursor:
-        # Count total URLs with low confidence
-        cursor.execute("""
-            SELECT COUNT(*) as count
-            FROM urls
-            WHERE nlp_para_count_lrl > 0 AND nlp_full_confidence >= ?
-        """, (confidence_threshold,))
-        total_count_row = cursor.fetchone()
-        total_count = total_count_row[0] if total_count_row else 0
-
-        # Get top 5 URLs with highest confidence
-        cursor.execute("""
-            SELECT url, nlp_full_confidence
-            FROM urls
-            WHERE nlp_para_count_lrl > 0 AND nlp_full_confidence >= ?
-            ORDER BY nlp_full_confidence DESC
-            LIMIT 5
-        """, (confidence_threshold,))
-        lowest = cursor.fetchall()
-
-        result = {
-            "total_high_confidence": total_count,
-            "top_5_highest_confidence": lowest
-        }
-        return result
+    return count_high_confidence_urls_filterparam(confidence_threshold, "nlp_para_count_lrl > 0")
     
+    # with get_cursor() as cursor:
+    #     # Count total URLs with low confidence
+    #     cursor.execute("""
+    #         SELECT COUNT(*) as count
+    #         FROM urls
+    #         WHERE nlp_para_count_lrl > 0 AND nlp_full_confidence >= ?
+    #     """, (confidence_threshold,))
+    #     total_count_row = cursor.fetchone()
+    #     total_count = total_count_row[0] if total_count_row else 0
 
-# Count URLs with Low Paragraph Percentage and Low Confidence for a Given Language and get top 5 lowest:
-def count_low_para_percent_low_confidence_urls(lang, para_threshold=90, confidence_threshold=0.9):
+    #     # Get top 5 URLs with highest confidence
+    #     cursor.execute("""
+    #         SELECT url, nlp_full_confidence
+    #         FROM urls
+    #         WHERE nlp_para_count_lrl > 0 AND nlp_full_confidence >= ?
+    #         ORDER BY nlp_full_confidence DESC
+    #         LIMIT 5
+    #     """, (confidence_threshold,))
+    #     lowest = cursor.fetchall()
+
+    #     result = {
+    #         "total_high_confidence": total_count,
+    #         "top_5_highest_confidence": lowest
+    #     }
+    #     return result
+    
+def count_low_para_percent_low_confidence_urls_filterparam(para_threshold,confidence_threshold, where_str):
+    """Count URLs with Low Paragraph Percentage and Low Confidence for a Given Language and get top 5 lowest"""
+    
     with get_cursor() as cursor:
         # Count total URLs with low paragraph percentage and low confidence
-        cursor.execute("""
+        cursor.execute(f"""
             SELECT COUNT(*) as count
             FROM urls
-            WHERE nlp_full_lang = ? AND nlp_para_perc_lrl < ? AND nlp_full_confidence < ?
-        """, (lang, para_threshold, confidence_threshold))
+            WHERE {where_str} AND nlp_para_perc_lrl < ? AND nlp_full_confidence < ?
+        """, (para_threshold, confidence_threshold))
         total_count_row = cursor.fetchone()
         total_count = total_count_row[0] if total_count_row else 0
 
         # Get top 5 URLs with lowest paragraph percentage and low confidence
-        cursor.execute("""
+        cursor.execute(f"""
             SELECT url, nlp_para_perc_lrl, nlp_full_confidence
             FROM urls
-            WHERE nlp_full_lang = ? AND nlp_para_perc_lrl < ? AND nlp_full_confidence < ?
+            WHERE {where_str} AND nlp_para_perc_lrl < ? AND nlp_full_confidence < ?
             ORDER BY nlp_para_perc_lrl ASC, nlp_full_confidence ASC
             LIMIT 5
-        """, (lang, para_threshold, confidence_threshold))
+        """, (para_threshold, confidence_threshold))
         lowest = cursor.fetchall()
 
         result = {
@@ -648,91 +734,154 @@ def count_low_para_percent_low_confidence_urls(lang, para_threshold=90, confiden
             "top_5_lowest_para_percent_low_confidence": lowest
         }
         return result
+
+# Count URLs with Low Paragraph Percentage and Low Confidence for a Given Language and get top 5 lowest:
+def count_low_para_percent_low_confidence_urls(lang, para_threshold=90, confidence_threshold=0.9):
+    return count_low_para_percent_low_confidence_urls_filterparam(para_threshold,confidence_threshold, f"nlp_full_lang = '{lang}'")
+    
+    # with get_cursor() as cursor:
+    #     # Count total URLs with low paragraph percentage and low confidence
+    #     cursor.execute("""
+    #         SELECT COUNT(*) as count
+    #         FROM urls
+    #         WHERE nlp_full_lang = ? AND nlp_para_perc_lrl < ? AND nlp_full_confidence < ?
+    #     """, (lang, para_threshold, confidence_threshold))
+    #     total_count_row = cursor.fetchone()
+    #     total_count = total_count_row[0] if total_count_row else 0
+
+    #     # Get top 5 URLs with lowest paragraph percentage and low confidence
+    #     cursor.execute("""
+    #         SELECT url, nlp_para_perc_lrl, nlp_full_confidence
+    #         FROM urls
+    #         WHERE nlp_full_lang = ? AND nlp_para_perc_lrl < ? AND nlp_full_confidence < ?
+    #         ORDER BY nlp_para_perc_lrl ASC, nlp_full_confidence ASC
+    #         LIMIT 5
+    #     """, (lang, para_threshold, confidence_threshold))
+    #     lowest = cursor.fetchall()
+
+    #     result = {
+    #         "total_low_para_percent_low_confidence": total_count,
+    #         "top_5_lowest_para_percent_low_confidence": lowest
+    #     }
+    #     return result
 
 
 # Count URLs with Low Paragraph Percentage and Low Confidence for a Given Language and get top 5 lowest:
 def count_low_para_percent_low_confidence_urls_lrlparacount(para_threshold=90, confidence_threshold=0.9):
+    return count_low_para_percent_low_confidence_urls_filterparam(para_threshold,confidence_threshold, "nlp_para_count_lrl > 0")
+    # with get_cursor() as cursor:
+    #     # Count total URLs with low paragraph percentage and low confidence
+    #     cursor.execute("""
+    #         SELECT COUNT(*) as count
+    #         FROM urls
+    #         WHERE nlp_para_count_lrl > 0 AND nlp_para_perc_lrl < ? AND nlp_full_confidence < ?
+    #     """, (para_threshold, confidence_threshold))
+    #     total_count_row = cursor.fetchone()
+    #     total_count = total_count_row[0] if total_count_row else 0
+
+    #     # Get top 5 URLs with lowest paragraph percentage and low confidence
+    #     cursor.execute("""
+    #         SELECT url, nlp_para_perc_lrl, nlp_full_confidence
+    #         FROM urls
+    #         WHERE nlp_para_count_lrl > 0 AND nlp_para_perc_lrl < ? AND nlp_full_confidence < ?
+    #         ORDER BY nlp_para_perc_lrl ASC, nlp_full_confidence ASC
+    #         LIMIT 5
+    #     """, (para_threshold, confidence_threshold))
+    #     lowest = cursor.fetchall()
+
+    #     result = {
+    #         "total_low_para_percent_low_confidence": total_count,
+    #         "top_5_lowest_para_percent_low_confidence": lowest
+    #     }
+    #     return result
+
+
+def count_high_para_percent_high_confidence_urls_filterparam(para_threshold,confidence_threshold, where_str):
+    """Count URLs with High Paragraph Percentage and High Confidence for a Given Language and get top 5 highest"""
+    
     with get_cursor() as cursor:
-        # Count total URLs with low paragraph percentage and low confidence
-        cursor.execute("""
+        # Count total URLs with high paragraph percentage and high confidence
+        cursor.execute(f"""
             SELECT COUNT(*) as count
             FROM urls
-            WHERE nlp_para_count_lrl > 0 AND nlp_para_perc_lrl < ? AND nlp_full_confidence < ?
+            WHERE {where_str} AND nlp_para_perc_lrl >= ? AND nlp_full_confidence >= ?
         """, (para_threshold, confidence_threshold))
         total_count_row = cursor.fetchone()
         total_count = total_count_row[0] if total_count_row else 0
 
-        # Get top 5 URLs with lowest paragraph percentage and low confidence
-        cursor.execute("""
+        # Get top 5 URLs with highest paragraph percentage and high confidence
+        cursor.execute(f"""
             SELECT url, nlp_para_perc_lrl, nlp_full_confidence
             FROM urls
-            WHERE nlp_para_count_lrl > 0 AND nlp_para_perc_lrl < ? AND nlp_full_confidence < ?
-            ORDER BY nlp_para_perc_lrl ASC, nlp_full_confidence ASC
+            WHERE {where_str} AND nlp_para_perc_lrl >= ? AND nlp_full_confidence >= ?
+            ORDER BY nlp_para_perc_lrl DESC, nlp_full_confidence DESC
             LIMIT 5
         """, (para_threshold, confidence_threshold))
-        lowest = cursor.fetchall()
+        highest = cursor.fetchall()
 
         result = {
-            "total_low_para_percent_low_confidence": total_count,
-            "top_5_lowest_para_percent_low_confidence": lowest
+            "total_high_para_percent_high_confidence": total_count,
+            "top_5_highest_para_percent_high_confidence": highest
         }
         return result
     
 # Count URLs with High Paragraph Percentage and High Confidence for a Given Language and get top 5 highest:
 def count_high_para_percent_high_confidence_urls(lang, para_threshold=90, confidence_threshold=0.9):
-    with get_cursor() as cursor:
-        # Count total URLs with high paragraph percentage and high confidence
-        cursor.execute("""
-            SELECT COUNT(*) as count
-            FROM urls
-            WHERE nlp_full_lang = ? AND nlp_para_perc_lrl >= ? AND nlp_full_confidence >= ?
-        """, (lang, para_threshold, confidence_threshold))
-        total_count_row = cursor.fetchone()
-        total_count = total_count_row[0] if total_count_row else 0
+    return count_high_para_percent_high_confidence_urls_filterparam(lang, para_threshold,confidence_threshold, f"nlp_full_lang = '{lang}'")
+    # with get_cursor() as cursor:
+    #     # Count total URLs with high paragraph percentage and high confidence
+    #     cursor.execute("""
+    #         SELECT COUNT(*) as count
+    #         FROM urls
+    #         WHERE nlp_full_lang = ? AND nlp_para_perc_lrl >= ? AND nlp_full_confidence >= ?
+    #     """, (lang, para_threshold, confidence_threshold))
+    #     total_count_row = cursor.fetchone()
+    #     total_count = total_count_row[0] if total_count_row else 0
 
-        # Get top 5 URLs with highest paragraph percentage and high confidence
-        cursor.execute("""
-            SELECT url, nlp_para_perc_lrl, nlp_full_confidence
-            FROM urls
-            WHERE nlp_full_lang = ? AND nlp_para_perc_lrl >= ? AND nlp_full_confidence >= ?
-            ORDER BY nlp_para_perc_lrl DESC, nlp_full_confidence DESC
-            LIMIT 5
-        """, (lang, para_threshold, confidence_threshold))
-        highest = cursor.fetchall()
+    #     # Get top 5 URLs with highest paragraph percentage and high confidence
+    #     cursor.execute("""
+    #         SELECT url, nlp_para_perc_lrl, nlp_full_confidence
+    #         FROM urls
+    #         WHERE nlp_full_lang = ? AND nlp_para_perc_lrl >= ? AND nlp_full_confidence >= ?
+    #         ORDER BY nlp_para_perc_lrl DESC, nlp_full_confidence DESC
+    #         LIMIT 5
+    #     """, (lang, para_threshold, confidence_threshold))
+    #     highest = cursor.fetchall()
 
-        result = {
-            "total_high_para_percent_high_confidence": total_count,
-            "top_5_highest_para_percent_high_confidence": highest
-        }
-        return result
+    #     result = {
+    #         "total_high_para_percent_high_confidence": total_count,
+    #         "top_5_highest_para_percent_high_confidence": highest
+    #     }
+    #     return result
 
 # Count URLs with High Paragraph Percentage and High Confidence for a Given Language and get top 5 highest:
 def count_high_para_percent_high_confidence_urls_lrlparacount(para_threshold=90, confidence_threshold=0.9):
-    with get_cursor() as cursor:
-        # Count total URLs with high paragraph percentage and high confidence
-        cursor.execute("""
-            SELECT COUNT(*) as count
-            FROM urls
-            WHERE nlp_para_count_lrl > 0 AND nlp_para_perc_lrl >= ? AND nlp_full_confidence >= ?
-        """, (para_threshold, confidence_threshold))
-        total_count_row = cursor.fetchone()
-        total_count = total_count_row[0] if total_count_row else 0
+    return count_high_para_percent_high_confidence_urls_filterparam(para_threshold,confidence_threshold, "nlp_para_count_lrl > 0")
+    # with get_cursor() as cursor:
+    #     # Count total URLs with high paragraph percentage and high confidence
+    #     cursor.execute("""
+    #         SELECT COUNT(*) as count
+    #         FROM urls
+    #         WHERE nlp_para_count_lrl > 0 AND nlp_para_perc_lrl >= ? AND nlp_full_confidence >= ?
+    #     """, (para_threshold, confidence_threshold))
+    #     total_count_row = cursor.fetchone()
+    #     total_count = total_count_row[0] if total_count_row else 0
 
-        # Get top 5 URLs with highest paragraph percentage and high confidence
-        cursor.execute("""
-            SELECT url, nlp_para_perc_lrl, nlp_full_confidence
-            FROM urls
-            WHERE nlp_para_count_lrl > 0 AND nlp_para_perc_lrl >= ? AND nlp_full_confidence >= ?
-            ORDER BY nlp_para_perc_lrl DESC, nlp_full_confidence DESC
-            LIMIT 5
-        """, (para_threshold, confidence_threshold))
-        highest = cursor.fetchall()
+    #     # Get top 5 URLs with highest paragraph percentage and high confidence
+    #     cursor.execute("""
+    #         SELECT url, nlp_para_perc_lrl, nlp_full_confidence
+    #         FROM urls
+    #         WHERE nlp_para_count_lrl > 0 AND nlp_para_perc_lrl >= ? AND nlp_full_confidence >= ?
+    #         ORDER BY nlp_para_perc_lrl DESC, nlp_full_confidence DESC
+    #         LIMIT 5
+    #     """, (para_threshold, confidence_threshold))
+    #     highest = cursor.fetchall()
 
-        result = {
-            "total_high_para_percent_high_confidence": total_count,
-            "top_5_highest_para_percent_high_confidence": highest
-        }
-        return result
+    #     result = {
+    #         "total_high_para_percent_high_confidence": total_count,
+    #         "top_5_highest_para_percent_high_confidence": highest
+    #     }
+    #     return result
     
 # Not currently called
 def get_url_counts_by_query_id(lang, query_id):
@@ -827,7 +976,6 @@ def get_url_counts_by_type(lang, search_type):
 #         """, (lang,))
 #         results = cursor.fetchall()
 #     return [{"query": row[0], "total_url_count": row[1], "lang_url_count": row[2]} for row in results]
-
 
 def get_top_queries_with_most_urls(lang):
     with get_cursor() as cursor:
