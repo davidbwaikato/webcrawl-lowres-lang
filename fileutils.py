@@ -2,9 +2,11 @@ import jsonc
 import hashlib
 import os
 
+import termdistribution
 import globals
 
-from const import GOOGLE, GOOGLE_API, BING, BING_API, QUERY, TYPE, TOTAL, MAORI, UNHANDLED, ITEMS
+# **** XXXX
+#from const import GOOGLE, GOOGLE_API, BING, BING_API, QUERY, TYPE, TOTAL, MAORI, UNHANDLED, ITEMS
 
 def move_file(src_path,dst_path):
     try:
@@ -59,6 +61,26 @@ def read_json(filename):
         return jsonc.load(file)
 
 
+
+def load_language_dictionary(lang_uc):
+    try:
+        """Load the dictionary for a specific language from its JSON file"""
+        filename = os.path.join("dicts",f"unigram_words_{lang_uc.lower()}.json")
+        print(f"*** filename = {filename}")
+        with open(filename, "r", encoding="utf-8") as file:
+            return jsonc.load(file)
+    except:
+        return None
+
+
+def load_language_dictionary_vector(lang_uc):
+    word_dict = load_language_dictionary(lang_uc)
+
+    termvec_rec = termdistribution.freqdict_to_termvec(word_dict)
+
+    return termvec_rec
+
+    
 def hash_url(url):
     """Return an MD5 hash of a given URL"""
     return hashlib.md5(url.encode()).hexdigest()

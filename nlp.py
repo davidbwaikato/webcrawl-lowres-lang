@@ -1,13 +1,14 @@
-
 import math
 import re
 
-import extract
-import queries
-
-from bs4 import BeautifulSoup
+#from bs4 import BeautifulSoup
+import bs4
 import PyPDF2
 import docx
+
+import extract
+import queries
+import termdistribution
 
 from lingua import Language, LanguageDetectorBuilder
 #detector = LanguageDetectorBuilder.from_all_languages().with_preloaded_language_models().build()
@@ -41,10 +42,31 @@ def clean_text(text,reg_expr=r'\n{3,}',replace_str='\n\n'):
     cleaned_text = re.sub(reg_expr, replace_str, text)
     return cleaned_text
 
+def text_to_clean_paras(text):
+    
+    simplified_para_boundary_text = clean_text(text, r'(\s*\n){2,}','\n')
+    paras = simplified_para_boundary_text.splitlines()
+
+    # Still possible to a leading empty para, and lines of text starting with a space
+    # => clean up the paras array
+
+    clean_paras = []
+    for para in paras:
+        if re.match(r'^\s*$',para):
+            continue
+        clean_para = re.sub(r'(^\s+)|(\s+$)', "", para)
+        clean_paras.append(clean_para)
+        
+    return clean_paras
+    
+        
 def extract_text_from_file(filepath, doc_type):
     if doc_type == "html":
-        with open(filepath, 'r', encoding='utf-8') as f:
-            soup = BeautifulSoup(f, 'html.parser')
+        # open the file as raw-binary (rather than utf-8) as it turns out BeautifulSoup
+        # auto-magically works out charset encoding of the file (e.g. explicitly as chatset
+        # <meta> tag), ultimately returning a Unicode string
+        with open(filepath, 'rb') as f: 
+            soup = bs4.BeautifulSoup(f, 'html.parser')
             return soup.get_text(separator=" ")
     elif doc_type == "pdf":
         with open(filepath, 'rb') as f:
@@ -60,38 +82,53 @@ def extract_text_from_file(filepath, doc_type):
         print(f"Unsupported doc_type: {doc_type}")
         return None
 
-def convert_text_to_parachunks(text, min_para_word_len):
+def convert_text_to_parachunks(text, min_para_word_len, min_parachunk_word_len=None):
     """Gets optimal sized chunks to run paragraph language detection for"""
 
-    if (globals.verbose >= 3):
-        verbose_char_len = globals.verbose*100
-        print(f"++++ process_text_in_chunks() text[:{verbose_char_len}] ++++")
-        print(text[:verbose_char_len])
+    #if (globals.verbose >= 5):
+    #    verbose_char_len = globals.verbose*50
+    #    print(f"++++ process_text_in_chunks() text[:{verbose_char_len}] ++++")
+    #    print(text[:verbose_char_len])
+    #    print("++++")
+
+
+    paras = text_to_clean_paras(text)
+
+    if (globals.verbose >= 4):
+        verbose_numpara_len = globals.verbose*10
+        print(f"++++ convert_text_to_parachunks() paras[:{verbose_numpara_len}] ++++")
+        print(f"{paras[:verbose_numpara_len]}")
         print("++++")
-
-    cleaned_text = clean_text(text, r'\n{2,}','\n')    
-    paras = cleaned_text.splitlines()
-
-    # **** XXXX debugging
-    #print(f"++++ CLEAN process_text_in_chunks() paras[:6] ++++")
-    #print(paras[:6])
+        
     
-    para_chunks = []
+    processed_paras = []
     
-    para_cat = ""
+    if (min_para_word_len != None):
+        for para in paras:
+            # **** XXXX
+            #if para.isspace():
+            #    continue
+            para_words = para.split()
+            if (len(para_words) > min_para_word_len):
+                # enough words to include/be processed
+                #para = para.strip()
+                processed_paras.append(para)
+        
+    else:
+        para_cat = ""
 
-    for para in paras:
-        if para.isspace():
-            continue
-        para_cat = para_cat + para + '\n'
-        para_cat_words = para_cat.split()
-        if (len(para_cat_words) > min_para_word_len):
-            # enough concatenated words to process
-            para_cat = para_cat.strip()            
-            para_chunks.append(para_cat)
-            para_cat = ""
+        for para in paras:
+            #if para.isspace():
+            #    continue
+            para_cat = para_cat + para + '\n'
+            para_cat_words = para_cat.split()
+            if (len(para_cat_words) > min_parachunk_word_len):
+                # enough concatenated words to include/be processed
+                #para_cat = para_cat.strip()            
+                processed_paras.append(para_cat)
+                para_cat = ""
             
-    return para_chunks
+    return processed_paras
 
 # def detect_language_spacy(text):
 #     doc = nlp(text)
@@ -131,10 +168,10 @@ def convert_text_to_parachunks(text, min_para_word_len):
 def process_text_in_chunksDEPRECATED(text, detect:Language):
     """Gets an optimal chunk size to run paragraph language detection for"""
 
-    if (globals.verbose >= 3):
-        print("++++ process_text_in_chunks() ++++")
-        print(text[:globals.verbose*100])
-        print("++++")
+    #if (globals.verbose >= 3):
+    #    print("++++ process_text_in_chunks() ++++")
+    #    print(text[:globals.verbose*100])
+    #    print("++++")
         
     words = text.split()
     num_words = len(words)
@@ -163,42 +200,6 @@ def process_text_in_chunksDEPRECATED(text, detect:Language):
     percentage = (count / total) * 100 if total > 0 else 0
     return percentage
 
-def calc_cosine_similarity(termvec_rec1, termvec_rec2):
-
-    termvec_vals1 = termvec_rec1['term_vals']
-    termvec_vals2 = termvec_rec2['term_vals']
-    termvec_rec1_len = len(termvec_vals1)
-    termvec_rec2_len = len(termvec_vals2)
-
-    if (termvec_rec1_len != termvec_rec2_len):
-        print(f"calc_cosine_similarity(): different vector lengths ({termvec_rec1_len} vs {termvec_rec2_len} => returning similarity score of 0")
-        return 0.0
-
-    dot_prod = 0.0
-    mag_squared_vec1 = 0.0
-    mag_squared_vec2 = 0.0
-
-    
-    for i in range(0,termvec_rec1_len):
-        vec1_cpt = termvec_vals1[i]
-        vec2_cpt = termvec_vals2[i]
-
-        dot_prod += (vec1_cpt * vec2_cpt)
-
-        mag_squared_vec1 += (vec1_cpt * vec1_cpt)
-        mag_squared_vec2 += (vec2_cpt * vec2_cpt)
-
-    if mag_squared_vec1 == 0.0 or mag_squared_vec2 == 0.0:
-        print(f"Degenerative vector, all terms were 0 => returning similarity score of 0")
-        return 0.0
-    
-    mag_vec1 = math.sqrt(mag_squared_vec1)
-    mag_vec2 = math.sqrt(mag_squared_vec2)
-
-    cos_sim = dot_prod / (mag_vec1 * mag_vec2)
-
-    return cos_sim
-
         
 def termdist_compute_language_confidence(para_chunk,lang_dict_termvec_rec):
 
@@ -208,24 +209,32 @@ def termdist_compute_language_confidence(para_chunk,lang_dict_termvec_rec):
     para_unigram_word_freq = extract.get_token_frequencies(para_unigram_tokens)
     para_unigram_word_freq_dict = dict(para_unigram_word_freq)
 
-    para_termvec_rec = queries.aligned_freqdict_to_termvec(lang_dict_termvec_rec,para_unigram_word_freq_dict)
+    para_termvec_rec = termdistribution.aligned_freqdict_to_termvec(lang_dict_termvec_rec,para_unigram_word_freq_dict)
     
-    confidence = calc_cosine_similarity(para_termvec_rec,lang_dict_termvec_rec)
+    confidence = termdistribution.calc_cosine_similarity(para_termvec_rec,lang_dict_termvec_rec)
     return confidence
     
 def detect_para_language_lingua(text, detect_langname, lang_dict_termvec_rec):
     """Working with (potetially contatenated paragraphs to reach config set min word count) run language detection on paragraphs"""
 
-    min_para_word_len = globals.config['nlp']['min_para_word_len']
-    min_para_confidence = globals.config['nlp']['min_para_confidence']
-        
-    para_chunks = convert_text_to_parachunks(text,min_para_word_len)
+    min_para_word_len = globals.config['nlp'].get('min_para_word_len',None)
+    min_para_confidence = globals.config['nlp'].get('min_para_confidence',None)
+
+    min_parachunk_word_len = globals.config['nlp'].get('min_parachunk_word_len',None)
+    min_parachunk_confidence = globals.config['nlp'].get('min_parachunk_confidence',None)
+
+    min_termdist_confidence = globals.config['nlp']['min_termdist_confidence']
+    
+    para_chunks = convert_text_to_parachunks(text,min_para_word_len,min_parachunk_word_len)
     
     # Process each chunk and count paragraphs
     num_para_chunks = len(para_chunks)
 
-    lrl_match_count = 0
-    lrl_match_paras = []
+    lrl_lingua_match_count  = 0
+    lrl_lingua_match_paras  = []
+
+    lrl_termdist_match_count  = 0
+    lrl_termdist_match_paras  = []
     
     for para_chunk in para_chunks:
         lingua_paralang_rec = detector.detect_language_of(para_chunk)
@@ -234,18 +243,29 @@ def detect_para_language_lingua(text, detect_langname, lang_dict_termvec_rec):
         termdist_para_confidence = termdist_compute_language_confidence(para_chunk,lang_dict_termvec_rec)
         
         if (globals.verbose >= 2):
-            print(f"----\n    Para chunk:\n----\n{para_chunk}----\n")
+            print(f"----\n    Para chunk:\n----\n{para_chunk}\n----\n")
         if (globals.verbose > 1):
-            print(f"    Para chunk Predicted language = {lingua_paralang_rec.name} (confidence={lingua_para_confidence} (cosine similarity={termdist_para_confidence})")
+            print(f"    Para chunk Predicted language = {lingua_paralang_rec.name} (confidence={lingua_para_confidence}) (low-resoure language cosine similarity score={termdist_para_confidence})")
             print("====")
     
         if lingua_paralang_rec.name == detect_langname and lingua_para_confidence >= min_para_confidence:
-            lrl_match_count += 1
-            lrl_match_paras.append(para_chunk)
+            lrl_lingua_match_count += 1
+            lrl_lingua_match_paras.append(para_chunk)
 
-    print(f"  Para Chunks: lrl_match_count={lrl_match_count} out of {num_para_chunks}")
+        if termdist_para_confidence >= min_termdist_confidence:
+            lrl_termdist_match_count += 1
+            lrl_termdist_match_paras.append(para_chunk)
+            
+        if lingua_paralang_rec.name == detect_langname and lingua_para_confidence >= min_para_confidence and termdist_para_confidence >= min_termdist_confidence:
+            print( "==== Cosine Similarity aligned with NLP Lingua Prediction for paragraph ====")
+            print(f"++++ Para chunk Predicted language = {lingua_paralang_rec.name} (confidence={lingua_para_confidence}) (low-resoure language cosine similarity score={termdist_para_confidence}) ++++")
+            print( "----")
+            print(para_chunk)
+            print( "----")
+                        
+    print(f"  Para Chunks: lrl_lingua_match_count={lrl_lingua_match_count} out of {num_para_chunks}")
     
-    return num_para_chunks, lrl_match_count, lrl_match_paras
+    return num_para_chunks, lrl_lingua_match_count, lrl_lingua_match_paras
 
 
 
@@ -262,14 +282,14 @@ def detect_language_lingua(text,  detect_langname, lang_dict_termvec_rec):
         
     # Paragraph-level analysis    
 
-    num_para_chunks,lrl_match_count,lrl_paras_unused = detect_para_language_lingua(text,detect_langname, lang_dict_termvec_rec)
-    lrl_para_percentage = (lrl_match_count / num_para_chunks) * 100 if num_para_chunks > 0 else 0
+    num_para_chunks,lrl_lingua_match_count,lrl_paras_unused = detect_para_language_lingua(text,detect_langname, lang_dict_termvec_rec)
+    lrl_para_percentage = (lrl_lingua_match_count / num_para_chunks) * 100 if num_para_chunks > 0 else 0
       
     return {
         "full_lang": predicted_full_langname,
         "full_conf": round(lingua_fullconf, 2),
         "para_count": num_para_chunks,
-        "para_count_lrl": lrl_match_count,
+        "para_count_lrl": lrl_lingua_match_count,
         "para_perc_lrl":  round(lrl_para_percentage, 2)
     }
 

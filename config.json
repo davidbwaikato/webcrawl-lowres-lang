@@ -43,8 +43,11 @@
     ],
 
     "nlp" : {
-	"min_para_word_len"  : 100, // minimum number of words we want concatenated, before NLP is applied
-	"min_para_confidence": 0.75
+	"min_para_word_len"       : 30, // minimum number of words we want in a para, before NLP is applied
+	"min_para_confidence"     : 0.75,
+	"min_parachunk_word_len"  : 100, // minimum number of words we want in a concatenated para-chunk, before NLP is applied	
+	"min_parachunk_confidence": 0.75,
+	"min_termdist_confidence" : 0.5
     },
     
     "languages": {

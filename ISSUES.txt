@@ -1,24 +1,12 @@
 
- * Combine lang into DB name and downloads dir
- 
- * support text/plain
- 
-* config params for chunking text for NLP
-
-* 2nd phase get frequency dict
-
-* PDF text extract looks to be struggling with macrons
-
-* Remove hardwirded Language.MAORI
-
 * Have config option for loading in English full dict and removing any matches
 * Have config option for remove all matches that occur between the different UDHRs?
 
-* for simple HTML download, use BS4 to fix up to be UTF8 when downloaded (leave charset for now, or change to orig-charset???)
+* PDF text extract looks to be struggling with macrons
 
-
-
-* Implement bing_api
+* Support text/plain as one of the download times
+ 
+* Implement bing_api?
 
 * Support of other NLP lang id tools (e.g. FastText)
 
@@ -100,14 +88,6 @@ Away to get URL https://www.procon.co.nz/tuku
 Error getting file for https://www.procon.co.nz/tuku: argument of type 'NoneType' is not iterable
 
 ====
-
-
-!!!!Don't assume UTF8 for download!!!
-
-1 ============ 17:55:14.253017 ============ 143
-download_and_safe(), url_id=143, url=http://www.temarareo.org/PAPAKUPU/Word_Classes.htm
-Away to get URL http://www.temarareo.org/PAPAKUPU/Word_Classes.htm
-1 Error in NLP: 'utf-8' codec can't decode byte 0x96 in position 3087: invalid start byte
 
 
 =====

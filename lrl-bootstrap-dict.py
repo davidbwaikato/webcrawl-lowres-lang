@@ -5,8 +5,8 @@ import argparse
 
 import const
 import extract
+import fileutils
 import globals
-import utils
 
 
 def get_args():
@@ -32,7 +32,7 @@ def get_args():
 
 if __name__ == "__main__":
 
-    globals.config = utils.read_config()
+    globals.config = fileutils.read_config()
     globals.args = get_args()
 
     lang = globals.args.lang

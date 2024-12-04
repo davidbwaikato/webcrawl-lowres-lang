@@ -35,11 +35,11 @@ import const
 import globals
 
 import display
+import fileutils
 import nlp
 import queries
 import sql
 import search
-import utils
 
 
 stop_event = threading.Event()
@@ -238,7 +238,7 @@ def download_and_save(url_id, url, download_with_selenium,apply_robots_txt, down
         sha256_hash.update(response_content)
         file_hash = sha256_hash.hexdigest()
 
-        filepath,rejected_filepath = utils.get_download_filename_pair(downloads_dir,file_hash,doc_type)
+        filepath,rejected_filepath = fileutils.get_download_filename_pair(downloads_dir,file_hash,doc_type)
 
         if not os.path.exists(filepath) or os.path.exists(rejected_filepath):
                     
@@ -303,14 +303,14 @@ def search_and_fetch(query, search_engine_type, num_pages=1, **kwargs):
         driver.quit()
 
     # Remove blacklisted URLs
-    urls = utils.remove_blacklisted(urls, globals.config['blacklist'])
+    urls = fileutils.remove_blacklisted(urls, globals.config['blacklist'])
     if len(urls) == 0:
         return
 
     # Prepare the URL data for insertion
     # => not currently downloaded, so url downloaded=False and (nlp) handle=False
           
-    url_data = [(query_id, engine, url, utils.hash_url(url), False, False) for url in urls]
+    url_data = [(query_id, engine, url, fileutils.hash_url(url), False, False) for url in urls]
     # Insert URLs into the database (only the new ones)
     # print(url_data)
     sql.insert_urls_many(url_data)
@@ -384,9 +384,9 @@ def download_worker(sub_urls, download_with_selenium,apply_robots_txt, tcount):
 
 def nlp_reject_downloaded_file(url_id,downloads_dir,url_filehash,url_doctype,reason):
     sql.set_url_as_handled(url_id)
-    url_filepath_downloaded,url_filepath_rejected = utils.get_download_filename_pair(downloads_dir,url_filehash,url_doctype)
+    url_filepath_downloaded,url_filepath_rejected = fileutils.get_download_filename_pair(downloads_dir,url_filehash,url_doctype)
     print(f"Thread {tcount} xxxxxxxxxxxx rejecting ({reason}) xxxxxxxxxxxx")
-    utils.move_file(url_filepath_downloaded,url_filepath_rejected)
+    fileutils.move_file(url_filepath_downloaded,url_filepath_rejected)
     
 def nlp_worker(sub_urls, lang_dict_termvec_rec, detect_name, tcount):
 
@@ -406,12 +406,12 @@ def nlp_worker(sub_urls, lang_dict_termvec_rec, detect_name, tcount):
             print(f"Thread {tcount}: Skipping as already NLP-processed (handled) URL {url_href}")
             continue
 
-        url_filepath,rejected_url_filepath = utils.get_download_filename_pair(downloads_dir,url_filehash,url_doctype)
+        url_filepath,rejected_url_filepath = fileutils.get_download_filename_pair(downloads_dir,url_filehash,url_doctype)
 
         if (os.path.exists(rejected_url_filepath)):
             # It's been processed on a previous run, but this run with different config NLP settings
             # might lead to a different outcome
-            utils.move_file(rejected_url_filepath,url_filepath)
+            fileutils.move_file(rejected_url_filepath,url_filepath)
             
         now = datetime.now()
         print(f"Thread {tcount} ============ NLP Stage @ {now.strftime('%H:%M:%S')} ============ URL id {url_id}")
@@ -522,16 +522,18 @@ def validate_args(args):
 
 
 if __name__ == "__main__":
-    globals.config = utils.read_config()
+    globals.config = fileutils.read_config()
     globals.args = get_args()
 
     lang = globals.args.lang
     lang_lc = lang.lower()
     lang_uc = lang.upper()
+    lang_ic = lang_lc.capitalize() # initial capital letter
     
     globals.lang    = lang
     globals.lang_lc = lang_lc
     globals.lang_uc = lang_uc
+    globals.lang_ic = lang_ic
     
     globals.verbose = globals.args.verbose
 
@@ -644,7 +646,7 @@ if __name__ == "__main__":
 
         # NLP
         if globals.args.run_nlp or globals.args.run_all:
-            lang_dict_termvec_rec = queries.load_language_dictionary_vector(lang)
+            lang_dict_termvec_rec = fileutils.load_language_dictionary_vector(lang)
             
             # Get all relevant queries from the database
             urls = sql.get_all_urls_filter_downloaded_handled(downloaded=True,handled=False) 

@@ -1,12 +1,19 @@
 #!/bin/bash -x
 
+
+lang=${1:-maori}
+
+if [ "x$EXTRA_ARGS" = "x" ] ; then
+   echo "To provide additional command-line arguments, Set the variable EXTRA_ARGS"
+fi
+
 #	   --apply_robots_txt \
 
-rm -rf querydownloads-maori.db downloads-maori \
+rm -rf querydownloads-$lang.db downloads-$lang \
     && ./lrl-crawler.py \
 	   --run_all \
 	   --query_count 1 \
 	   --search_engine google \
 	   --num_threads 1 --num_pages 1 \
-	   $@ \
-	   maori
+	   $EXTRA_ARGS \
+	   $lang

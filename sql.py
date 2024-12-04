@@ -1,6 +1,6 @@
 import sqlite3
 import time
-import utils
+import fileutils
 
 from contextlib import contextmanager
 from urllib.parse import urlparse
@@ -71,7 +71,7 @@ def insert_query(query, type, lang):
 def insert_url(query_id, type, url, doc_type=""):
     """Insert a new URL into the urls table."""
     with get_cursor() as cursor:
-        url_hash = utils.hash_url(url)
+        url_hash = fileutils.hash_url(url)
         cursor.execute("""
             INSERT INTO urls (query_id, type, url, url_hash, doc_type)
             VALUES (?, ?, ?, ?, ?)
@@ -142,7 +142,7 @@ def insert_query_if_not_exists(query, type, lang):
 def insert_url_if_not_exists(query_id, type, url, doc_type="", downloaded=False, handled=False):
     """Insert a URL into the urls table if it doesn't already exist."""
     with get_cursor() as cursor:
-        url_hash = utils.hash_url(url)
+        url_hash = fileutils.hash_url(url)
         cursor.execute(
             "SELECT EXISTS(SELECT 1 FROM urls WHERE url_hash=?)", (url_hash,))
         if not bool(cursor.fetchone()[0]):

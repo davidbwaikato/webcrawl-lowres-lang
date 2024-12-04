@@ -1,52 +1,10 @@
 import json
 import random
-from sql import insert_query_if_not_exists
 
-def load_language_dictionary(language):
-    try:
-        """Load the dictionary for a specific language from its JSON file"""
-        filename = f"dicts/unigram_words_{language.lower()}.json"
-        with open(filename, "r", encoding="utf-8") as file:
-            return json.load(file)
-    except:
-        return None
-
-# **** XXXX new module for termdist = term distribution
-
-def freqdict_to_termvec(word_dict):
-    
-    word_dict_ordered_keys = sorted(word_dict.keys())
-    
-    term_order = []
-    term_vals  = []
-
-    for key in word_dict_ordered_keys:
-        term_order.append(key)
-        term_vals.append(word_dict.get(key));
-
-    return { 'term_order': term_order, 'term_vals': term_vals }
-
-def aligned_freqdict_to_termvec(ground_truth_termvec_rec,word_dict):
-
-    aligned_term_order = []
-    aligned_term_vals  = []
-        
-    for key in ground_truth_termvec_rec['term_order']:
-        aligned_term_order.append(key)
-        val = word_dict.get(key,0)
-        aligned_term_vals.append(val)
-        
-    return { 'term_order': aligned_term_order, 'term_vals': aligned_term_vals }
+import fileutils
+import sql
 
 
-def load_language_dictionary_vector(language):
-    word_dict = load_language_dictionary(language)
-
-    termvec_rec = freqdict_to_termvec(word_dict)
-
-    return termvec_rec
-
-    
 def combined_word_queries(word_dict, word_count=2, query_count=10):
     """Generate combined word queries"""
     words = list(word_dict.keys())
@@ -96,14 +54,15 @@ def order_and_remove_duplicates(queries):
     return [{"query": " ".join(query), "type": sorted_queries[query]} for query in sorted_queries]
 
 
-def generate_all(lang, word_count=3, query_count=5):
+def generate_all(lang_uc, word_count=3, query_count=5):
     """Create all types of queries for a language"""
     print("Creating queries.")
-    word_dict = load_language_dictionary(lang)
+    word_dict = fileutils.load_language_dictionary(lang_uc)
     
     if word_dict is None:
-        print(f"Dictionary for {lang} not found")
+        print(f"Unigram frequency dictionary for '{lang_uc.lower()}' not found")
         exit(1)
+        
     queries = []
     queries.extend(combined_word_queries(word_dict, 1, query_count))
     queries.extend(combined_word_queries(word_dict, word_count, query_count))
@@ -116,7 +75,7 @@ def generate_all(lang, word_count=3, query_count=5):
     for query in queries:
         # Insert the query
         print("Inserting", query)
-        if insert_query_if_not_exists(query["query"], query["type"], lang):
+        if sql.insert_query_if_not_exists(query["query"], query["type"], lang_uc):
             unique += 1
     print(f"Created {unique} unique queries")
     return queries
