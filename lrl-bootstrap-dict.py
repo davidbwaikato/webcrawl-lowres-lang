@@ -8,15 +8,6 @@ import extract
 import globals
 import utils
 
-class DataSourceEnum(Enum):
-    UDHR     = 'udhr'
-    DATABASE = 'database'
-
-    def __str__(self):
-        return self.value
-
-
-# DataSourceEnum = Enum('DataSource2Enum', [('UDHR', 'udhr'), ('DATABASE', 'database')])
 
 def get_args():
     """Parse command line arguments."""
@@ -32,12 +23,6 @@ def get_args():
     parser.add_argument("-f", "--force", action="store_true", default=False,
                         help=f"force regeneration of frequency count 'dictionaries', overriding existing JSON file(s)")
 
-    
-    parser.add_argument('-s', "--data_source", type=DataSourceEnum, choices=list(DataSourceEnum),
-                        default=DataSourceEnum.UDHR,
-                        help=f"The data source used for generating word frequencies [Default=DataSourceEnum.UDHR]")
-
-    
     # Positional argument
     parser.add_argument("lang",
                         help=f"the language of the frequency-count based 'dictionary' to generate (if 'all' then all languages in config.json are processed)")
@@ -65,10 +50,6 @@ if __name__ == "__main__":
     verbose = globals.args.verbose
     
     # Generate freqency count 'dictionaries' from UDHR PDFs
-    data_source = globals.args.data_source
+    extract.extract_udhr(lang_initialcap,force)
 
-    if (data_source == DataSourceEnum.UDHR):
-        extract.extract_udhr(lang_initialcap,force)
-    else:
-        extract.extract_dict(lang_initialcap,force)
             
