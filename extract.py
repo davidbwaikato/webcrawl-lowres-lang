@@ -83,6 +83,8 @@ def extract_udhr(lang_initialcap,force=False):
     
     config_languages = globals.config['languages']
 
+    found_lang = False
+    
     for config_language, item in config_languages.items():
         # print(f"args.lang={lang_initialcap}, config_language = {config_language}")
         
@@ -90,7 +92,8 @@ def extract_udhr(lang_initialcap,force=False):
             continue
 
         print(f"Processing langauge: {config_language}")
-
+        found_lang = True
+        
         file_path = item['path']
         if file_path.endswith('.pdf'):
             text = extract_pdf(file_path)
@@ -136,7 +139,12 @@ def extract_udhr(lang_initialcap,force=False):
             print(f"  Output file '{bigram_ofilename}' already exists.")
             print(f"  To regenerate/update this file, remove this file first before running the script, or use -f/--force to overwrite.")
             print( "  ----")
-            
+
+    if (not found_lang):
+        print( "----")
+        print(f"Failed to find language '{lang_initialcap}' in config.json.  No frequency-count dictionary generated")
+        print( "----")
+        
 def get_lang_paragraphs(urls,lang_uc, lang_dict_termvec_rec):
 
     lang_all_paras = []

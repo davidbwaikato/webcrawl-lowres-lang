@@ -49,7 +49,6 @@ if __name__ == "__main__":
     force   = globals.args.force
     verbose = globals.args.verbose
     
-    # Generate freqency count 'dictionaries' from UDHR PDFs
+    # Generate freqency count 'dictionaries' from UDHR PDF/Text file(s)
     extract.extract_udhr(lang_initialcap,force)
-
             

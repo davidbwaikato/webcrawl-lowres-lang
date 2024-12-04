@@ -10,10 +10,11 @@ import extract
 import queries
 import termdistribution
 
+import globals
+
 from lingua import Language, LanguageDetectorBuilder
-#detector = LanguageDetectorBuilder.from_all_languages().with_preloaded_language_models().build()
-linguaLanguages = [Language.ENGLISH, Language.MAORI]
-detector = LanguageDetectorBuilder.from_languages(*linguaLanguages).build()
+
+
 # import spacy
 # import nltk
 # from langdetect import DetectorFactory
@@ -23,7 +24,6 @@ detector = LanguageDetectorBuilder.from_languages(*linguaLanguages).build()
 # from nltk.corpus import stopwords
 # from googletrans import Translator
 
-import globals
 
 # # nltk.download('punkt')
 # # nltk.download('stopwords')
@@ -36,6 +36,15 @@ import globals
 #     return LanguageDetector()
 # # Add the component to the pipeline
 # nlp.add_pipe("language_detector")
+
+lingua_detector = LanguageDetectorBuilder.from_all_languages().with_preloaded_language_models().build()
+#linguaLanguages = [Language.ENGLISH, Language.MAORI]
+#lingua_detector = LanguageDetectorBuilder.from_languages(*linguaLanguages).build()
+
+supported_uc_langs = [ lang.name for lang in Language.all()]
+
+def is_supported_lang(lang_uc):
+    return lang_uc in supported_uc_langs
 
 def clean_text(text,reg_expr=r'\n{3,}',replace_str='\n\n'):
     # Replace instances where there are more than two consecutive newlines with just two.
@@ -192,7 +201,7 @@ def process_text_in_chunksDEPRECATED(text, detect:Language):
     total = len(paragraphs)
     count = 0
     for chunk in paragraphs:
-        language = detector.detect_language_of(chunk)
+        language = lingua_detector.detect_language_of(chunk)
         if language == detect:
             count += 1
 
@@ -237,8 +246,8 @@ def detect_para_language_lingua(text, detect_langname, lang_dict_termvec_rec):
     lrl_termdist_match_paras  = []
     
     for para_chunk in para_chunks:
-        lingua_paralang_rec = detector.detect_language_of(para_chunk)
-        lingua_para_confidence = detector.compute_language_confidence(para_chunk, lingua_paralang_rec)
+        lingua_paralang_rec = lingua_detector.detect_language_of(para_chunk)
+        lingua_para_confidence = lingua_detector.compute_language_confidence(para_chunk, lingua_paralang_rec)
 
         termdist_para_confidence = termdist_compute_language_confidence(para_chunk,lang_dict_termvec_rec)
         
@@ -273,8 +282,8 @@ def detect_language_lingua(text,  detect_langname, lang_dict_termvec_rec):
     """Detect language with confidence level using Lingua.py"""
 
     # Full-text level analysis
-    lingua_fulllang_rec = detector.detect_language_of(text)
-    lingua_fullconf = detector.compute_language_confidence(text, lingua_fulllang_rec)
+    lingua_fulllang_rec = lingua_detector.detect_language_of(text)
+    lingua_fullconf = lingua_detector.compute_language_confidence(text, lingua_fulllang_rec)
 
     predicted_full_langname = None
     if lingua_fulllang_rec != None:

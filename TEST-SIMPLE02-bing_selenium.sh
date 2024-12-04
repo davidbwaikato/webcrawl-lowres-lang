@@ -1,9 +1,11 @@
-#!/bin/bash -x
+#!/bin/bash
 
 lang=${1:-maori}
 
 if [ "x$EXTRA_ARGS" = "x" ] ; then
-   echo "To provide additional command-line arguments, Set the variable EXTRA_ARGS"
+    echo "----"
+    echo "To provide additional command-line arguments, Set the variable EXTRA_ARGS"
+    echo "----"
 fi
 
 rm -rf querydownloads-$lang.db downloads-$lang \
@@ -14,4 +16,4 @@ rm -rf querydownloads-$lang.db downloads-$lang \
 			--download_with_selenium \
 			--num_threads 4 --num_pages 1 \
 			$EXTRA_ARGS \
-			$lagng
+			$lang

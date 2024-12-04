@@ -5,19 +5,14 @@ import os
 import termdistribution
 import globals
 
-# **** XXXX
-#from const import GOOGLE, GOOGLE_API, BING, BING_API, QUERY, TYPE, TOTAL, MAORI, UNHANDLED, ITEMS
-
 def move_file(src_path,dst_path):
     try:
-        print(f"***** moving {src_path} -> {dst_path}")
         os.rename(src_path,dst_path)
     except Exception as e:
         print(f"Error renaming file from {src_path} to {dst_path}: {e}")
 
 def delete_file(path):
     try:
-        print(f"***** deleting {path}")
         os.remove(path)
     except FileNotFoundError:
         print(f"File not found: {path}")
@@ -66,7 +61,6 @@ def load_language_dictionary(lang_uc):
     try:
         """Load the dictionary for a specific language from its JSON file"""
         filename = os.path.join("dicts",f"unigram_words_{lang_uc.lower()}.json")
-        print(f"*** filename = {filename}")
         with open(filename, "r", encoding="utf-8") as file:
             return jsonc.load(file)
     except:

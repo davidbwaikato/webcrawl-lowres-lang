@@ -80,6 +80,13 @@
 	    "cr": "countryTO",
 	    "hl": "en",
 	    "gl": "to"
-	}
+	},
+	"Welsh": {
+	    "path": "udhr/udhr-welsh.pdf",
+	    "cr": "country??",
+	    "hl": "??",
+	    "gl": "??"
+	},
+	
     }
 }
