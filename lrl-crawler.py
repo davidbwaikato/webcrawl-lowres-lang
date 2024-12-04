@@ -159,13 +159,6 @@ def init_driver(driver_name):
     
     return driver
 
-# **** XXXX
-#def get_download_filename(downloads_dir,filehash,doctype):
-#    filename = filehash + "." + doctype
-#    full_filename = os.path.join(downloads_dir, filename)
-#
-#    return full_filename
-    
 
 def download_and_save(url_id, url, download_with_selenium,apply_robots_txt, downloads_dir, url_timeout=10):
 
@@ -395,7 +388,7 @@ def nlp_reject_downloaded_file(url_id,downloads_dir,url_filehash,url_doctype,rea
     print(f"Thread {tcount} xxxxxxxxxxxx rejecting ({reason}) xxxxxxxxxxxx")
     utils.move_file(url_filepath_downloaded,url_filepath_rejected)
     
-def nlp_worker(sub_urls, detect_name, tcount):
+def nlp_worker(sub_urls, lang_dict_termvec_rec, detect_name, tcount):
 
     downloads_dir = globals.config['downloads_dir']
     
@@ -405,7 +398,6 @@ def nlp_worker(sub_urls, detect_name, tcount):
         url_href       = url[3]
         url_filehash   = url[5]
         url_doctype    = url[6]
-        #url_downloaded = url[7]
         url_handled    = url[8]
 
         if url_handled == 1: # already handled it
@@ -456,7 +448,7 @@ def nlp_worker(sub_urls, detect_name, tcount):
                 #delete_file(url_filepath)                                
                 continue            
 
-            langs = nlp.run_nlp_algorithms(cleaned_extracted_text, globals.lang_uc)
+            langs = nlp.run_nlp_algorithms(cleaned_extracted_text, globals.lang_uc, lang_dict_termvec_rec)
             if langs["lingua"]["full_lang"] == None:
                 nlp_reject_downloaded_file(url_id,downloads_dir,url_filehash,url_doctype,"NLP failed to detect language")
                 #sql.set_url_as_handled(url_id)
@@ -502,10 +494,14 @@ def nlp_worker(sub_urls, detect_name, tcount):
         
 def validate_args(args):
     try:
+        # **** XXXX
+        # Deprecating this check.  If not provided a valid arg, then will still fail, but with error message
+        # about not finding the unigram/bigram file
+        
         # Validate lang
-        valid_langs = [Language.MAORI.name] # **** XXXX
-        if globals.lang_uc not in valid_langs:
-            raise ValueError(f"Invalid language provided. Valid languages are: {valid_langs}")
+        #valid_langs = [Language.MAORI.name] # **** XXXX
+        #if globals.lang_uc not in valid_langs:
+        #    raise ValueError(f"Invalid language provided. Valid languages are: {valid_langs}")
         
         # Validate word_count, query_count, num_threads, num_pages
         for arg in [globals.args.word_count, globals.args.query_count, globals.args.num_threads, globals.args.num_pages]:
@@ -519,6 +515,7 @@ def validate_args(args):
         if globals.args.search_engine and globals.args.search_engine not in valid_search_engine_types:
             raise ValueError(
                 f"Invalid search type provided: {globals.args.search_engine}. Valid options are: {valid_search_engine_types}")
+
     except Exception as e:
         print(e)
         exit(0)
@@ -540,6 +537,10 @@ if __name__ == "__main__":
 
     globals.config['downloads_dir'] = globals.config['downloads_dir_root'] + "-" + lang_lc
     globals.config['database_file'] = globals.config['database_file_root'] + "-" + lang_lc + ".db"
+
+    database_filename = globals.config.get('database_file')
+    print(f"Setting database name: {database_filename}")        
+    sql.set_db_filename(database_filename)        
     
     if globals.args.set_queries_unhandled:
         sql.set_all_queries_unhandled()
@@ -557,21 +558,14 @@ if __name__ == "__main__":
         exit(0)
         
     try:
-
         validate_args(globals.args)
 
-        lang_uc          = globals.lang_uc
-        
         # The following are now explicitly set to their config defaults if not give on CLI
         word_count    = globals.args.word_count
         query_count   = globals.args.query_count
         search_engine = globals.args.search_engine
         num_threads   = globals.args.num_threads
         num_pages     = globals.args.num_pages
-
-        # **** XXXX
-        ## Only controlable from the commandline
-        #unhandled_flag = globals.args.unhandled
 
         # Ensure the downloads directory exists
         downloads_dir = globals.config.get('downloads_dir')
@@ -580,15 +574,12 @@ if __name__ == "__main__":
             os.makedirs(downloads_dir)
         
         # Create the database
-        database_filename = globals.config.get('database_file')
-        print(f"Creating database: {database_filename}")        
-        sql.set_db_filename(database_filename)        
         sql.create(reset=False)
         
         if globals.args.display_stats:
             display.stats(lang_uc)
             exit(0)
-
+                
         # Queries
         if globals.args.run_querygen or globals.args.run_all:
             print("Generating Queries.")
@@ -653,9 +644,12 @@ if __name__ == "__main__":
 
         # NLP
         if globals.args.run_nlp or globals.args.run_all:
+            lang_dict_termvec_rec = queries.load_language_dictionary_vector(lang)
+            
             # Get all relevant queries from the database
             urls = sql.get_all_urls_filter_downloaded_handled(downloaded=True,handled=False) 
             print(f"Number of urls to be processed by NLP: {len(urls)}")
+
             # Split queries into sub-lists for each thread
             split_urls = [urls[i::num_threads] for i in range(num_threads)]
 
@@ -664,7 +658,7 @@ if __name__ == "__main__":
             print("Starting nlp threads.")
             tcount = 1
             for sub_urls in split_urls:
-                t = threading.Thread(target=nlp_worker, args=(sub_urls, globals.lang_uc, tcount))
+                t = threading.Thread(target=nlp_worker, args=(sub_urls, lang_dict_termvec_rec, globals.lang_uc, tcount))
                 threads.append(t)
                 t.start()
                 tcount += 1
