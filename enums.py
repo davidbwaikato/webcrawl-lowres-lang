@@ -8,3 +8,13 @@ class LangDetect(Enum):
     def __str__(self):
         return self.value
 
+
+
+class DictOutputMode(Enum):
+    merge = 'merge'
+    replace = 'replace'
+
+    def __str__(self):
+        return self.value
+
+    

@@ -250,43 +250,58 @@ def detect_para_language_lingua(text,detect_langname, nlp_lang_supported, lang_d
 
     lrl_termdist_match_count  = 0
     lrl_termdist_match_paras  = []
+
+    lrl_agreement_match_paras = []
     
     for para_chunk in para_chunks:
         lingua_paralang_rec = lingua_detector.detect_language_of(para_chunk)
         lingua_para_confidence = lingua_detector.compute_language_confidence(para_chunk, lingua_paralang_rec)
 
         termdist_para_confidence = termdist_compute_language_confidence(para_chunk,lang_dict_termvec_rec)
+
+        show_para = False
         
         if (globals.verbose >= 2):
-            print(f"----\n    Para chunk:\n----\n{para_chunk}\n----\n")
-        if (globals.verbose > 1):
-            print(f"    Para chunk Predicted language = {lingua_paralang_rec.name} (confidence={lingua_para_confidence}) (low-resoure language cosine similarity score={termdist_para_confidence})")
+            #print(f"----\n    Para block:\n----\n{para_chunk}\n----\n")
+            show_para = True
+            
+        if (globals.verbose > 1):            
+            print(f"    Para predicted language = {lingua_paralang_rec.name} (confidence={lingua_para_confidence}) (low-resoure language cosine similarity score={termdist_para_confidence})")
             print("====")
-
+            show_para = True
+            
         if termdist_para_confidence >= min_termdist_confidence:
+            print(f"==== LRL Cosine Similarity match  ({termdist_para_confidence}) ====")            
             lrl_termdist_match_count += 1
             lrl_termdist_match_paras.append(para_chunk)
-
+            show_para = True
+            
         if nlp_lang_supported:
             if lingua_paralang_rec.name == detect_langname and lingua_para_confidence >= min_para_confidence:
+                print(f"==== LRL NLP Lingua match         ({lingua_para_confidence}) ====")            
                 lrl_lingua_match_count += 1
                 lrl_lingua_match_paras.append(para_chunk)
-            
+                show_para = True
+                
             if lingua_paralang_rec.name == detect_langname and lingua_para_confidence >= min_para_confidence and termdist_para_confidence >= min_termdist_confidence:
-                print( "==== Cosine Similarity aligned with NLP Lingua Prediction for paragraph ====")
-                print(f"++++ Para chunk Predicted language = {lingua_paralang_rec.name} (confidence={lingua_para_confidence}) (low-resoure language cosine similarity score={termdist_para_confidence}) ++++")
-                print( "----")
-                print(para_chunk)
-                print( "----")
+                lrl_agreement_match_paras.append(para_chunk)
+                show_para = True
+                
+        if show_para:
+            print( "----")
+            print(para_chunk)
+            print( "----")
+            print()
                         
     print(f"  Paras: lrl_termdist_match_count = {lrl_termdist_match_count} out of {num_para_chunks}")
     if nlp_lang_supported:    
         print(f"         lrl_lingua_match_count   = {lrl_lingua_match_count} out of {num_para_chunks}") 
     
     return {
-        "num_paras"               : num_para_chunks,
-        "lrl_lingua_match_paras"  : lrl_lingua_match_paras,
-        "lrl_termdist_match_paras": lrl_termdist_match_paras
+        "num_paras"                 : num_para_chunks,
+        "lrl_lingua_match_paras"    : lrl_lingua_match_paras,
+        "lrl_termdist_match_paras"  : lrl_termdist_match_paras,
+        "lrl_agreement_match_paras" : lrl_agreement_match_paras
     }
         
 

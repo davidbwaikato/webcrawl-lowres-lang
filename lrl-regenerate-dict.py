@@ -21,8 +21,11 @@ def get_args():
         description="Generate a frequency-count based 'dictionary' for the specified language"
     )
 
-    parser.add_argument("-ld", "--langdetect", type=enums.LangDetect, choices=list(enums.LangDetect), default=enums.LangDetect.lingua,
-                        help=f"Algorithm used to detect low-resourced language: 'cossim' performs the Cosine Similarity measure on term-vectors of text and is always guaranteed to be available;  'lingua' uses the Python NLP package Lingua, as long as the language is one of the languages the package supports (75 languages at the time of writing), otherwise it defaults to 'cossim'  [Default=lingua]")
+    parser.add_argument("-ld", "--lang_detect", type=enums.LangDetect, choices=list(enums.LangDetect), default=enums.LangDetect.lingua,
+                        help=f"Algorithm used to detect low-resourced language: 'cossim' performs the Cosine Similarity measure on term-vectors of text and is always guaranteed to be available;  'lingua' uses the Python NLP package Lingua, as long as the language is one of the languages the package supports (75 languages at the time of writing)  [Default=lingua]")
+
+    parser.add_argument("-om", "--output_mode", type=enums.DictOutputMode, choices=list(enums.DictOutputMode), default=enums.DictOutputMode.merge,
+                        help=f"Control how the new frequency-count based dictionary file is generated [Default=merge]")
     
     parser.add_argument("-v", "--verbose", type=int, default=1,
                         help=f"level of verbosity used for output [Default=1]")
@@ -42,7 +45,7 @@ if __name__ == "__main__":
     globals.config = fileutils.read_config()
     globals.args = get_args()
 
-    lang_detect_algorithm = globals.args.langdetect
+    lang_detect_algorithm = globals.args.lang_detect
     
     lang = globals.args.lang
     lang_lc = lang.lower()
@@ -67,7 +70,7 @@ if __name__ == "__main__":
     if lang_detect_algorithm == enums.LangDetect.lingua and not nlp_lang_supported:
         print( "----",file=sys.stderr)
         #print(f"NLP Language Detection does not support '{lang_initialcap}, switching to using 'cossim' (Cosine Similarity)",file=sys.stderr)
-        print(f"Error: NLP Language Detection does not support '{lang_initialcap}'. Consider switching to using --langdect cossim (Cosine Similarity)",file=sys.stderr)
+        print(f"Error: NLP Language Detection does not support '{lang_initialcap}'. Consider switching to using --lang_detect cossim (Cosine Similarity)",file=sys.stderr)
         print( "----",file=sys.stderr)
         exit(1)
                             

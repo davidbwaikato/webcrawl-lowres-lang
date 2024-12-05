@@ -57,24 +57,35 @@ def read_json(filename):
 
 
 
-def load_language_dictionary(lang_uc):
+def load_language_dictionary(lang):
+    """Load the dictionary for a specific language from its JSON file"""    
     try:
-        """Load the dictionary for a specific language from its JSON file"""
-        filename = os.path.join("dicts",f"unigram_words_{lang_uc.lower()}.json")
+        lang_lc = lang.lower()
+        filename = os.path.join("dicts",f"unigram_words_{lang_lc}.json")
         with open(filename, "r", encoding="utf-8") as file:
             return jsonc.load(file)
     except:
         return None
 
 
-def load_language_dictionary_vector(lang_uc):
-    word_dict = load_language_dictionary(lang_uc)
+def load_language_dictionary_vector(lang):
+    word_dict = load_language_dictionary(lang)
 
     termvec_rec = termdistribution.freqdict_to_termvec(word_dict)
 
     return termvec_rec
 
-    
+
+def append_to_language_dictionary(core_dict,topup_dict):
+
+    for topup_key in topup_dict.keys():
+        topup_val = topup_dict[topup_key]
+        if topup_key in core_dict:
+            core_dict[topup_key] += topup_val
+        else:
+            core_dict[topup_key] = topup_val
+            
+
 def hash_url(url):
     """Return an MD5 hash of a given URL"""
     return hashlib.md5(url.encode()).hexdigest()

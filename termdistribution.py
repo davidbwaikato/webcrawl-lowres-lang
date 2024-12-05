@@ -1,5 +1,7 @@
 import math
 
+import globals
+
 def freqdict_to_termvec(word_dict):
     
     word_dict_ordered_keys = sorted(word_dict.keys())
@@ -52,7 +54,8 @@ def calc_cosine_similarity(termvec_rec1, termvec_rec2):
         mag_squared_vec2 += (vec2_cpt * vec2_cpt)
 
     if mag_squared_vec1 == 0.0 or mag_squared_vec2 == 0.0:
-        print(f"Degenerative vector, all terms were 0 => returning similarity score of 0")
+        if globals.verbose > 1:
+            print(f"Degenerative vector, all terms were 0 => returning similarity score of 0")
         return 0.0
     
     mag_vec1 = math.sqrt(mag_squared_vec1)

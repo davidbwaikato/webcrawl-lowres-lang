@@ -197,41 +197,42 @@ def extract_dict(lang_initialcap,force, nlp_lang_supported,lang_detect_algorithm
     database_filename = globals.config.get('database_file')
     sql.set_db_filename(database_filename)
     
-    #config_languages = globals.config['languages']
-    
-#    for config_lang, item in config_languages.items():
-        # print(f"args.lang={lang_initialcap}, config_lang = {config_lang}")
-        
-#        if (lang_initialcap != "All") and (lang_initialcap != config_lang):
-#            continue
-
-#        print(f"Processing langauge: {config_lang}")
     print(f"Processing langauge: {lang_initialcap}")
     lang_dict_termvec_rec = fileutils.load_language_dictionary_vector(lang_initialcap)    
     
     urls = sql.get_all_urls_filter_downloaded_handled(downloaded=True, handled=True)
     
     lang_all_paras = get_lang_paragraphs(urls,lang_uc, nlp_lang_supported,lang_detect_algorithm, lang_dict_termvec_rec)
-    
+
+    # **** XXXX refactor into subroutine ????
     text = "\n".join(lang_all_paras)
     words = preprocess_text_into_unigram_words(text)
     tokens = filter_words(words,min_char_len=3)        
     
-    common_words = get_token_frequencies(tokens)
-    common_words_dict = dict(common_words)
+    downloaded_unigram_words = get_token_frequencies(tokens)
+    downloaded_unigram_words_dict = dict(downloaded_unigram_words)
+
+    dst_unigram_words_dict = None
     
-    if (verbose>1):
-        json.dump(common_words_dict, fp=sys.stdout, ensure_ascii=False, indent=4)
-        print()
-        
-    # Check if file exists and act according to `force` parameter
-    filename = f"dicts/unigram_words_{lang_lc}.json"        
-    if not os.path.exists(filename) or force:
-        fileutils.save_to_json(common_words_dict, filename)
+    if globals.args.output_mode == enums.DictOutputMode.merge:
+        core_unigram_words_dict = fileutils.load_language_dictionary(lang_uc)        
+        fileutils.append_to_language_dictionary(core_unigram_words_dict,downloaded_unigram_words_dict)
+        dst_unigram_words_dict = core_unigram_words_dict        
     else:
+        dst_unigram_words_dict = downloaded_unigram_words_dict
+        
+    # Check if frequency-coutn dictionary already exists and act according to `force` parameter
+    unigram_filename = f"dicts/unigram_words_{lang_lc}.json"        
+    if not os.path.exists(unigram_filename) or force:
+        fileutils.save_to_json(dst_unigram_words_dict, unigram_filename)
+    else:
+        print( "----")
+        print( "Frequency-based unigrams from downloaded files:")
+        json.dump(dst_unigram_words_dict, fp=sys.stdout, ensure_ascii=False, indent=4)
+        print( "----")              
         print()
-        print( "----")
-        print(f"Output file '{filename}' already exists.")
+        print( "====")
+        print(f"Output file '{unigram_filename}' already exists, so have printed JSON dict to standard-out..")
         print(f"To regenerate/update this file, remove this file first before running the script, or use -f/--force to overwrite.")
-        print( "----")
+        print( "====")
             
