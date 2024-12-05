@@ -4,7 +4,7 @@ import re
 import requests
 
 from bs4 import BeautifulSoup
-from selenium.webdriver.common.by import By
+#from selenium.webdriver.common.by import By
 from fake_useragent import UserAgent
 from urllib.parse import urlparse, parse_qs
 
@@ -30,8 +30,11 @@ def google(query,  page=1):
     """Fetch results from Google"""
 
     print(f"Running Google Search for: {query}, page {page}")
+
+    query_encoded = re.sub(r' ','+',query)
+    
     start = (page - 1) * 10
-    url = f"https://www.google.com/search?q={query}&start={start}"
+    url = f"https://www.google.com/search?q={query_encoded}&start={start}"
 
     ua = UserAgent()
     user_agent = ua.random
@@ -63,11 +66,13 @@ def google(query,  page=1):
 
 def google_selenium(query, driver, page=1):
     """Fetch results from Google using selenium"""
-    # https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/116.0.5845.96/win64/chromedriver-win64.zip
 
-    print(f"Running Google Selenium Search for: {query}, page {page}")    
+    print(f"Running Google Selenium Search for: {query}, page {page}")
+
+    query_encoded = re.sub(r' ','+',query)
+    
     start = (page - 1) * 10
-    url = f"https://www.google.com/search?q={query}&start={start}"
+    url = f"https://www.google.com/search?q={query_encoded}&start={start}"
     try:
         driver.get(url)
 
@@ -172,12 +177,14 @@ def bing(query,  page=1):
     """Fetch results from Bing"""
     print(f"Running Bing Search for: {query}, page {page}")
 
+    query_encoded = re.sub(r' ','+',query)
+    
     start = (page - 1) * 10
     if (page>1):
         # From empirial testing, found the first=11, first=21 to be how it works
         start = start +1
     
-    url = f"https://www.bing.com/search?q={query}&first={start}"
+    url = f"https://www.bing.com/search?q={query_encoded}&first={start}"
 
     ua = UserAgent()
     user_agent = ua.random
@@ -213,12 +220,14 @@ def bing_selenium(query, driver, page=1):
     """Fetch results from Bing using Selenium"""
     print(f"Running Bing Selenium for {query}, page {page}")    
 
+    query_encoded = re.sub(r' ','+',query)
+    
     start = (page - 1) * 10
     if (page>1):
         # From empirial testing, found the first=11, first=21 to be how it works
         start = start +1
         
-    url = f"https://www.bing.com/search?q={query}&first={start}"
+    url = f"https://www.bing.com/search?q={query_encoded}&first={start}"
     try:
         driver.get(url)
         

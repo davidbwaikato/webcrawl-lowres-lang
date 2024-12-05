@@ -128,11 +128,6 @@ def set_nlp_values_from_existing(url_id, file_hash):
     
     return 1
 
-# Consider working with web-driver!!!
-#  https://www.geeksforgeeks.org/get-all-text-of-the-page-using-selenium-in-python/
-
-# From Sulan's earlier work:
-#   https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/116.0.5845.96/win64/chromedriver-win64.zip
 
 _gecko_service = None
 
@@ -170,6 +165,9 @@ def init_driver(driver_name):
         options.add_argument("--headless")
         driver = webdriver.Firefox(options=options, service=_gecko_service)
     elif driver_name == "chromedriver":
+        # From Sulan's earlier work:
+        #   https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/116.0.5845.96/win64/chromedriver-win64.zip
+        
         from selenium.webdriver.chrome.options import Options
         
         options = Options()
