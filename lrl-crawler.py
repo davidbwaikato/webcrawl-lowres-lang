@@ -134,23 +134,41 @@ def set_nlp_values_from_existing(url_id, file_hash):
 # From Sulan's earlier work:
 #   https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/116.0.5845.96/win64/chromedriver-win64.zip
 
+_gecko_service = None
 
 def init_driver(driver_name):
+    global _gecko_service
+
+    # For working with webdriver-manager, see
+    #   https://pypi.org/project/webdriver-manager/
+    from selenium import webdriver
+
     driver = None
 
     ua = UserAgent()
     user_agent = ua.random
 
     if driver_name == "geckodriver":
-        from webdriver_manager.firefox import GeckoDriverManager                
+        
+        # **** XXXX
+        #from webdriver_manager.firefox import GeckoDriverManager
+        #executable_path = GeckoDriverManager().install()
+        
+        from selenium.webdriver.firefox.service import Service as FirefoxService
+        from webdriver_manager.firefox import GeckoDriverManager
+
         from selenium.webdriver.firefox.options import Options
 
-        executable_path = GeckoDriverManager().install()
-        
+        if _gecko_service == None:
+            # **** XXXX
+            # For now control the version, so it doesn't keep hitting the http://api.github.com/.../latest URL,
+            # as this turns out to be rate limited
+            _gecko_service = FirefoxService(GeckoDriverManager(version="v0.35.0").install())
+                    
         options = Options()
         options.add_argument(f'--user-agent={user_agent}')
         options.add_argument("--headless")
-        driver = webdriver.Firefox(options=options, executable_path=executable_path)
+        driver = webdriver.Firefox(options=options, service=_gecko_service)
     elif driver_name == "chromedriver":
         from selenium.webdriver.chrome.options import Options
         

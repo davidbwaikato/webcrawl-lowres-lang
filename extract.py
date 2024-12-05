@@ -229,6 +229,7 @@ def extract_dict(lang_initialcap,force, nlp_lang_supported,lang_detect_algorithm
         print( "----")
         print( "Frequency-based unigrams from downloaded files:")
         json.dump(dst_unigram_words_dict, fp=sys.stdout, ensure_ascii=False, indent=4)
+        print()
         print( "----")              
         print()
         print( "====")
