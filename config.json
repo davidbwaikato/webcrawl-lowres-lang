@@ -49,6 +49,11 @@
 	"min_parachunk_confidence": 0.75,
 	"min_termdist_confidence" : 0.5
     },
+
+    // The following field names look to be inspired by the URL-params search engines like Google use
+    // cr => Country Code (ISO 3166-1) [can lookup at https://simplelocalize.io/data/country/WS/)
+    // hl => Language Code (ISO 639)   [can lookup at https://localizely.com/language-code/cy/]
+    // gl => geographic area
     
     "languages": {
 	"Hawaiian": {
@@ -83,9 +88,9 @@
 	},
 	"Welsh": {
 	    "path": "udhr/udhr-welsh.pdf",
-	    "cr": "country??",
-	    "hl": "??",
-	    "gl": "??"
+	    "cr": "countryGB-WLS",
+	    "hl": "cy",
+	    "gl": "uk"
 	},
 	
     }
