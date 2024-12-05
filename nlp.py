@@ -43,7 +43,8 @@ lingua_detector = LanguageDetectorBuilder.from_all_languages().with_preloaded_la
 
 supported_uc_langs = [ lang.name for lang in Language.all()]
 
-def is_supported_lang(lang_uc):
+def is_supported_lang(lang):
+    lang_uc = lang.upper()
     return lang_uc in supported_uc_langs
 
 def clean_text(text,reg_expr=r'\n{3,}',replace_str='\n\n'):

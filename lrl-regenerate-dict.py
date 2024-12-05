@@ -77,5 +77,5 @@ if __name__ == "__main__":
     # Generate freqency count 'dictionaries' from downloaded web pages,
     # targetting the para that are in the NLP lrl-detected language
 
-    extract.extract_dict(lang_initialcap,force, nlp_lang_supported,lang_detect_algorithm)
+    extract.extract_database_downloaded(lang_initialcap,force, nlp_lang_supported,lang_detect_algorithm)
             

@@ -184,8 +184,7 @@ def get_lang_paragraphs(urls,lang_uc, nlp_lang_supported,lang_detect_algorithm, 
     return lang_all_paras
 
 
-def extract_dict(lang_initialcap,force, nlp_lang_supported,lang_detect_algorithm):
-
+def extract_database_downloaded(lang_initialcap,force, nlp_lang_supported,lang_detect_algorithm):
     """Use the database to go through the downloaded files, apply NLP to locate
     paragraphs of text the score extremely highly for the given language, and
     from that generate the word-based frequency counts to save as JSON"""
@@ -236,4 +235,5 @@ def extract_dict(lang_initialcap,force, nlp_lang_supported,lang_detect_algorithm
         print(f"Output file '{unigram_filename}' already exists, so have printed JSON dict to standard-out..")
         print(f"To regenerate/update this file, remove this file first before running the script, or use -f/--force to overwrite.")
         print( "====")
+
             
