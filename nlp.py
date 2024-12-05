@@ -76,7 +76,9 @@ def extract_text_from_file(filepath, doc_type):
         # <meta> tag), ultimately returning a Unicode string
         with open(filepath, 'rb') as f: 
             soup = bs4.BeautifulSoup(f, 'html.parser')
-            return soup.get_text(separator=" ")
+            #text = soup.get_text(separator=" ")
+            text = soup.get_text(separator="\n",strip=True)
+            return text
     elif doc_type == "pdf":
         with open(filepath, 'rb') as f:
             reader = PyPDF2.PdfReader(f)
@@ -212,7 +214,7 @@ def process_text_in_chunksDEPRECATED(text, detect:Language):
         
 def termdist_compute_language_confidence(para_chunk,lang_dict_termvec_rec):
 
-    # **** XXXX refector into function
+    # **** XXXX refactor into function
     para_unigram_words = extract.preprocess_text_into_unigram_words(para_chunk)
     para_unigram_tokens = extract.filter_words(para_unigram_words,min_char_len=3)
     para_unigram_word_freq = extract.get_token_frequencies(para_unigram_tokens)
@@ -223,8 +225,12 @@ def termdist_compute_language_confidence(para_chunk,lang_dict_termvec_rec):
     confidence = termdistribution.calc_cosine_similarity(para_termvec_rec,lang_dict_termvec_rec)
     return confidence
     
-def detect_para_language_lingua(text, detect_langname, lang_dict_termvec_rec):
-    """Working with (potetially contatenated paragraphs to reach config set min word count) run language detection on paragraphs"""
+def detect_para_language_lingua(text,detect_langname, nlp_lang_supported, lang_dict_termvec_rec):
+    """
+    Working with (potetially contatenated paragraphs to reach config set min word count) 
+    run language detection on paragraphs.  Compute both the Cosine Similarity measure based
+    on 'lang_dict_termvec_rec' and (if 'nlp_lang_supported') the Lingua-based one
+    """
 
     min_para_word_len = globals.config['nlp'].get('min_para_word_len',None)
     min_para_confidence = globals.config['nlp'].get('min_para_confidence',None)
@@ -256,31 +262,39 @@ def detect_para_language_lingua(text, detect_langname, lang_dict_termvec_rec):
         if (globals.verbose > 1):
             print(f"    Para chunk Predicted language = {lingua_paralang_rec.name} (confidence={lingua_para_confidence}) (low-resoure language cosine similarity score={termdist_para_confidence})")
             print("====")
-    
-        if lingua_paralang_rec.name == detect_langname and lingua_para_confidence >= min_para_confidence:
-            lrl_lingua_match_count += 1
-            lrl_lingua_match_paras.append(para_chunk)
 
         if termdist_para_confidence >= min_termdist_confidence:
             lrl_termdist_match_count += 1
             lrl_termdist_match_paras.append(para_chunk)
+
+        if nlp_lang_supported:
+            if lingua_paralang_rec.name == detect_langname and lingua_para_confidence >= min_para_confidence:
+                lrl_lingua_match_count += 1
+                lrl_lingua_match_paras.append(para_chunk)
             
-        if lingua_paralang_rec.name == detect_langname and lingua_para_confidence >= min_para_confidence and termdist_para_confidence >= min_termdist_confidence:
-            print( "==== Cosine Similarity aligned with NLP Lingua Prediction for paragraph ====")
-            print(f"++++ Para chunk Predicted language = {lingua_paralang_rec.name} (confidence={lingua_para_confidence}) (low-resoure language cosine similarity score={termdist_para_confidence}) ++++")
-            print( "----")
-            print(para_chunk)
-            print( "----")
+            if lingua_paralang_rec.name == detect_langname and lingua_para_confidence >= min_para_confidence and termdist_para_confidence >= min_termdist_confidence:
+                print( "==== Cosine Similarity aligned with NLP Lingua Prediction for paragraph ====")
+                print(f"++++ Para chunk Predicted language = {lingua_paralang_rec.name} (confidence={lingua_para_confidence}) (low-resoure language cosine similarity score={termdist_para_confidence}) ++++")
+                print( "----")
+                print(para_chunk)
+                print( "----")
                         
-    print(f"  Para Chunks: lrl_lingua_match_count={lrl_lingua_match_count} out of {num_para_chunks}")
+    print(f"  Paras: lrl_termdist_match_count = {lrl_termdist_match_count} out of {num_para_chunks}")
+    if nlp_lang_supported:    
+        print(f"         lrl_lingua_match_count   = {lrl_lingua_match_count} out of {num_para_chunks}") 
     
-    return num_para_chunks, lrl_lingua_match_count, lrl_lingua_match_paras
-
-
+    return {
+        "num_paras"               : num_para_chunks,
+        "lrl_lingua_match_paras"  : lrl_lingua_match_paras,
+        "lrl_termdist_match_paras": lrl_termdist_match_paras
+    }
+        
 
 def detect_language_lingua(text,  detect_langname, lang_dict_termvec_rec):
     """Detect language with confidence level using Lingua.py"""
 
+    nlp_lang_supported = is_supported_lang(detect_langname)
+    
     # Full-text level analysis
     lingua_fulllang_rec = lingua_detector.detect_language_of(text)
     lingua_fullconf = lingua_detector.compute_language_confidence(text, lingua_fulllang_rec)
@@ -290,14 +304,20 @@ def detect_language_lingua(text,  detect_langname, lang_dict_termvec_rec):
         predicted_full_langname = lingua_fulllang_rec.name
         
     # Paragraph-level analysis    
+    detect_info = detect_para_language_lingua(text,detect_langname, nlp_lang_supported, lang_dict_termvec_rec)
+    
+    num_paras                = detect_info["num_paras"]
+    lrl_lingua_match_paras   = detect_info["lrl_lingua_match_paras"]
+    lrl_termdist_match_paras = detect_info["lrl_termdist_match_paras"]
 
-    num_para_chunks,lrl_lingua_match_count,lrl_paras_unused = detect_para_language_lingua(text,detect_langname, lang_dict_termvec_rec)
-    lrl_para_percentage = (lrl_lingua_match_count / num_para_chunks) * 100 if num_para_chunks > 0 else 0
+    lrl_lingua_match_count = len(lrl_lingua_match_paras)
+    
+    lrl_para_percentage = (lrl_lingua_match_count / num_paras) * 100 if num_paras > 0 else 0
       
     return {
         "full_lang": predicted_full_langname,
         "full_conf": round(lingua_fullconf, 2),
-        "para_count": num_para_chunks,
+        "para_count": num_paras,
         "para_count_lrl": lrl_lingua_match_count,
         "para_perc_lrl":  round(lrl_para_percentage, 2)
     }

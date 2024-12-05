@@ -1,4 +1,4 @@
-bs4==4.12.3
+beautifulsoup4==4.12.3
 fake_useragent==1.5.1
 html2text==2024.2.26
 json-with-comments==1.2.9

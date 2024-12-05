@@ -11,6 +11,8 @@
 * Support of other NLP lang id tools (e.g. FastText)
 
 
+* Not currently triggering on parachunk is specified on config.json
+
 =====
 
 Para chunk:

@@ -134,6 +134,7 @@ def set_nlp_values_from_existing(url_id, file_hash):
 # From Sulan's earlier work:
 #   https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/116.0.5845.96/win64/chromedriver-win64.zip
 
+
 def init_driver(driver_name):
     driver = None
 
@@ -141,12 +142,15 @@ def init_driver(driver_name):
     user_agent = ua.random
 
     if driver_name == "geckodriver":
+        from webdriver_manager.firefox import GeckoDriverManager                
         from selenium.webdriver.firefox.options import Options
-    
+
+        executable_path = GeckoDriverManager().install()
+        
         options = Options()
         options.add_argument(f'--user-agent={user_agent}')
         options.add_argument("--headless")
-        driver = webdriver.Firefox(options=options)
+        driver = webdriver.Firefox(options=options, executable_path=executable_path)
     elif driver_name == "chromedriver":
         from selenium.webdriver.chrome.options import Options
         
@@ -435,25 +439,16 @@ def nlp_worker(sub_urls, lang_dict_termvec_rec, detect_name, tcount):
             extracted_text = nlp.extract_text_from_file(url_filepath, url_doctype)
             if extracted_text == None:
                 nlp_reject_downloaded_file(url_id,downloads_dir,url_filehash,url_doctype,"no extracted text")
-                #sql.set_url_as_handled(url_id)
-                #print(f"Thread {tcount} xxxxxxxxxxxx deleting (no extracted text) xxxxxxxxxxxx")
-                #delete_file(url_filepath)                
                 continue
             cleaned_extracted_text = nlp.clean_text(extracted_text)
             # Guard against the cleaned text now being nothing but 100% whitespace
             if cleaned_extracted_text.isspace():
                 nlp_reject_downloaded_file(url_id,downloads_dir,url_filehash,url_doctype,"text all whitespace")
-                #sql.set_url_as_handled(url_id)
-                #print(f"Thread {tcount} xxxxxxxxxxxx deleting (text all whitespace) xxxxxxxxxxxx")
-                #delete_file(url_filepath)                                
                 continue            
 
-            langs = nlp.run_nlp_algorithms(cleaned_extracted_text, globals.lang_uc, lang_dict_termvec_rec)
+            langs = nlp.run_nlp_algorithms(cleaned_extracted_text,globals.lang_uc, lang_dict_termvec_rec)
             if langs["lingua"]["full_lang"] == None:
                 nlp_reject_downloaded_file(url_id,downloads_dir,url_filehash,url_doctype,"NLP failed to detect language")
-                #sql.set_url_as_handled(url_id)
-                #print(f"Thread {tcount} xxxxxxxxxxxx deleting (NLP failed to detect language) xxxxxxxxxxxx")
-                #delete_file(url_filepath)                                
                 continue
 
             # If reached this point, then NLP has made a language prediction (full page and per para)
@@ -480,10 +475,8 @@ def nlp_worker(sub_urls, lang_dict_termvec_rec, detect_name, tcount):
                 # No lrl language text                
                 nlp_reject_downloaded_file(url_id,downloads_dir,url_filehash,url_doctype,
                                            f"NLP did not detected any paragraphs in {detect_name.capitalize()} language")            
-            # print("{0} {1} {2} HANDLED".format(tcount, url_id, @ now.strftime('%H:%M:%S')))
 
         except FileNotFoundError as e:
-            # print("{0} {1} {2} HANDLED".format(tcount, url_id, @ now.strftime('%H:%M:%S')))
             sql.set_url_as_handled(url_id)
             print(f"Thread {tcount} File not found")
         except Exception as e:
@@ -493,16 +486,7 @@ def nlp_worker(sub_urls, lang_dict_termvec_rec, detect_name, tcount):
                 print(traceback.format_exc())
         
 def validate_args(args):
-    try:
-        # **** XXXX
-        # Deprecating this check.  If not provided a valid arg, then will still fail, but with error message
-        # about not finding the unigram/bigram file
-        
-        # Validate lang
-        #valid_langs = [Language.MAORI.name] # **** XXXX
-        #if globals.lang_uc not in valid_langs:
-        #    raise ValueError(f"Invalid language provided. Valid languages are: {valid_langs}")
-        
+    try:        
         # Validate word_count, query_count, num_threads, num_pages
         for arg in [globals.args.word_count, globals.args.query_count, globals.args.num_threads, globals.args.num_pages]:
             if arg and not isinstance(arg, int) and arg <= 0:

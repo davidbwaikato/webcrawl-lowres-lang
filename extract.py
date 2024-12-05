@@ -6,7 +6,9 @@ import sys
 import collections
 from pdfminer.high_level import extract_text as pdfminer_extract_text
 
+
 import fileutils
+import enums
 import globals
 import nlp
 import sql
@@ -145,74 +147,91 @@ def extract_udhr(lang_initialcap,force=False):
         print(f"Failed to find language '{lang_initialcap}' in config.json.  No frequency-count dictionary generated")
         print( "----")
         
-def get_lang_paragraphs(urls,lang_uc, lang_dict_termvec_rec):
+def get_lang_paragraphs(urls,lang_uc, nlp_lang_supported,lang_detect_algorithm, lang_dict_termvec_rec):
 
     lang_all_paras = []
 
     downloads_dir = globals.config['downloads_dir']
     
     for url in urls:
-        print(f"url_row = {url}")
+        url_href     = url[3]
         url_filehash = url[5]
         url_doctype  = url[6]
         nlp_para_count_lrl = url[11]
-        
-        if (nlp_para_count_lrl>0):
-            filepath,rejected_filepath = fileutils.get_download_filename_pair(downloads_dir,url_filehash,url_doctype)
+
+        print(f"++++ Processing filehash: {url_filehash} ++++")
+        print(f"  {url_href}")
+
+        # **** XXXX
+        #if (nlp_para_count_lrl>0):
+        filepath,rejected_filepath = fileutils.get_download_filename_pair(downloads_dir,url_filehash,url_doctype)
+        if os.path.exists(filepath):
             text =nlp.extract_text_from_file(filepath, url_doctype)
-                
-            num_para_chunks_unused,lrl_lang_match_count_unused,lrl_paras = nlp.detect_para_language_lingua(text,lang_uc,lang_dict_termvec_rec)
-            lang_all_paras.extend(lrl_paras)
+
+            detect_info = nlp.detect_para_language_lingua(text,lang_uc, nlp_lang_supported, lang_dict_termvec_rec)
+    
+            #num_paras                = detect_info["num_paras"]
+            lrl_lingua_match_paras   = detect_info["lrl_lingua_match_paras"]
+            lrl_termdist_match_paras = detect_info["lrl_termdist_match_paras"]
+
+            #lrl_lingua_match_count = len(lrl_lingua_match_paras)
+
+            if (lang_detect_algorithm == enums.LangDetect.cossim):
+                lang_all_paras.extend(lrl_termdist_match_paras)
+            else:
+                lang_all_paras.extend(lrl_lingua_match_paras)
             
     return lang_all_paras
 
 
-def extract_dict(lang_initialcap,force=False):
+def extract_dict(lang_initialcap,force, nlp_lang_supported,lang_detect_algorithm):
 
     """Use the database to go through the downloaded files, apply NLP to locate
     paragraphs of text the score extremely highly for the given language, and
     from that generate the word-based frequency counts to save as JSON"""
 
     lang_uc = lang_initialcap.upper()
+    lang_lc = lang_initialcap.lower()
     verbose = globals.verbose
 
     database_filename = globals.config.get('database_file')
     sql.set_db_filename(database_filename)
     
-    config_languages = globals.config['languages']
+    #config_languages = globals.config['languages']
     
-    for config_lang, item in config_languages.items():
+#    for config_lang, item in config_languages.items():
         # print(f"args.lang={lang_initialcap}, config_lang = {config_lang}")
         
-        if (lang_initialcap != "All") and (lang_initialcap != config_lang):
-            continue
+#        if (lang_initialcap != "All") and (lang_initialcap != config_lang):
+#            continue
 
-        print(f"Processing langauge: {config_lang}")
-
-        lang_dict_termvec_rec = fileutils.load_language_dictionary_vector(config_lang)    
-
-        urls = sql.get_all_urls_filter_downloaded_handled(downloaded=True, handled=True)
-
-        lang_all_paras = get_lang_paragraphs(urls,lang_uc,lang_dict_termvec_rec)
-
-        text = "\n".join(lang_all_paras)
-        words = preprocess_text_into_unigram_words(text)
-        tokens = filter_words(words,min_char_len=3)        
-
-        common_words = get_token_frequencies(tokens)
-        common_words_dict = dict(common_words)
+#        print(f"Processing langauge: {config_lang}")
+    print(f"Processing langauge: {lang_initialcap}")
+    lang_dict_termvec_rec = fileutils.load_language_dictionary_vector(lang_initialcap)    
+    
+    urls = sql.get_all_urls_filter_downloaded_handled(downloaded=True, handled=True)
+    
+    lang_all_paras = get_lang_paragraphs(urls,lang_uc, nlp_lang_supported,lang_detect_algorithm, lang_dict_termvec_rec)
+    
+    text = "\n".join(lang_all_paras)
+    words = preprocess_text_into_unigram_words(text)
+    tokens = filter_words(words,min_char_len=3)        
+    
+    common_words = get_token_frequencies(tokens)
+    common_words_dict = dict(common_words)
+    
+    if (verbose>1):
+        json.dump(common_words_dict, fp=sys.stdout, ensure_ascii=False, indent=4)
+        print()
         
-        if (verbose>1):
-            json.dump(common_words_dict, fp=sys.stdout, ensure_ascii=False, indent=4)
-            print()
+    # Check if file exists and act according to `force` parameter
+    filename = f"dicts/unigram_words_{lang_lc}.json"        
+    if not os.path.exists(filename) or force:
+        fileutils.save_to_json(common_words_dict, filename)
+    else:
+        print()
+        print( "----")
+        print(f"Output file '{filename}' already exists.")
+        print(f"To regenerate/update this file, remove this file first before running the script, or use -f/--force to overwrite.")
+        print( "----")
             
-        # Check if file exists and act according to `force` parameter
-        filename = f"dicts/common_words_{config_lang.lower()}.json"        
-        if not os.path.exists(filename) or force:
-            fileutils.save_to_json(common_words_dict, filename)
-        else:
-            print(f"  Output file '{filename}' already exists.")
-            print(f"  To regenerate/update this file, remove this file first before running the script, or use -f/--force to overwrite.")
-            print( "  ----")
-            
-    return

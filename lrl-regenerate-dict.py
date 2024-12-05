@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
 
+import sys
 import argparse
 
 import const
+import enums
 import extract
 import fileutils
 import globals
+import nlp
 
+
+
+    
 def get_args():
     """Parse command line arguments."""
 
@@ -15,6 +21,9 @@ def get_args():
         description="Generate a frequency-count based 'dictionary' for the specified language"
     )
 
+    parser.add_argument("-ld", "--langdetect", type=enums.LangDetect, choices=list(enums.LangDetect), default=enums.LangDetect.lingua,
+                        help=f"Algorithm used to detect low-resourced language: 'cossim' performs the Cosine Similarity measure on term-vectors of text and is always guaranteed to be available;  'lingua' uses the Python NLP package Lingua, as long as the language is one of the languages the package supports (75 languages at the time of writing), otherwise it defaults to 'cossim'  [Default=lingua]")
+    
     parser.add_argument("-v", "--verbose", type=int, default=1,
                         help=f"level of verbosity used for output [Default=1]")
     
@@ -33,6 +42,8 @@ if __name__ == "__main__":
     globals.config = fileutils.read_config()
     globals.args = get_args()
 
+    lang_detect_algorithm = globals.args.langdetect
+    
     lang = globals.args.lang
     lang_lc = lang.lower()
     lang_uc = lang.upper()
@@ -50,9 +61,18 @@ if __name__ == "__main__":
     globals.config['database_file'] = globals.config['database_file_root'] + "-" + lang_lc + ".db"
 
     lang_initialcap = globals.args.lang.capitalize();
+
+    nlp_lang_supported = nlp.is_supported_lang(lang_uc)
     
+    if lang_detect_algorithm == enums.LangDetect.lingua and not nlp_lang_supported:
+        print( "----",file=sys.stderr)
+        #print(f"NLP Language Detection does not support '{lang_initialcap}, switching to using 'cossim' (Cosine Similarity)",file=sys.stderr)
+        print(f"Error: NLP Language Detection does not support '{lang_initialcap}'. Consider switching to using --langdect cossim (Cosine Similarity)",file=sys.stderr)
+        print( "----",file=sys.stderr)
+        exit(1)
+                            
     # Generate freqency count 'dictionaries' from downloaded web pages,
     # targetting the para that are in the NLP lrl-detected language
 
-    extract.extract_dict(lang_initialcap,force)
+    extract.extract_dict(lang_initialcap,force, nlp_lang_supported,lang_detect_algorithm)
             
