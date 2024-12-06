@@ -1,6 +1,8 @@
-import sqlite3
-import time
 import fileutils
+import sys
+import time
+
+import sqlite3
 
 from contextlib import contextmanager
 from urllib.parse import urlparse
@@ -15,6 +17,8 @@ def set_db_filename(filename):
 def get_cursor():
     """Context manager for SQLite database cursor."""
     conn = sqlite3.connect(dbname)
+    conn.row_factory = sqlite3.Row # Allows access by column-header keys as well as the regular by-index [0], [1], ...
+    
     cursor = conn.cursor()
     try:
         yield cursor
@@ -180,10 +184,12 @@ def urls_exist(url_hashes, type):
             WHERE url_hash IN ({seq}) AND type = ?""".format(seq=','.join(['?']*len(url_hashes))),
                        (*url_hashes, type))
         existing_hashes = {row[0] for row in cursor.fetchall()}
+    
     return existing_hashes
 
+# **** XXXX YYYY -> Done!
 # **** XXXX this would benefit from being refactored to avoid implicit elem[] positions
-def insert_urls_many(url_data):
+def insert_urls_many_DEPRECATED(url_data):
     """Inserts multiple URLs at once into the database after filtering existing ones."""
 
     # Separate hashes for existing check
@@ -192,8 +198,7 @@ def insert_urls_many(url_data):
     existing_hashes = urls_exist(hashes_to_check, type_to_check)
 
     # Filter out the URLs that already exist based on hash and type
-    filtered_data = [item for item in url_data if item[3]
-                     not in existing_hashes]
+    filtered_data = [item for item in url_data if item[3] not in existing_hashes]
     if not filtered_data:  # If all URLs already exist, return early
         return
 
@@ -203,6 +208,42 @@ def insert_urls_many(url_data):
             VALUES (?, ?, ?, ?, ?, ?)
         """, filtered_data)
 
+def insert_urls_many(url_data):
+    """Inserts multiple URLs at once into the database after filtering existing ones."""
+
+    # Separate hashes for existing check
+    hashes_to_check = [item['url_hash'] for item in url_data]
+    type_to_check = url_data[0]['type'] # grab 'type' from first element of url_data array
+    existing_hashes = urls_exist(hashes_to_check, type_to_check)
+
+    # Filter out the URLs that already exist based on hash and type
+    filtered_data = [item for item in url_data if item['url_hash'] not in existing_hashes]
+
+    num_unfiltered_data = len(url_data)
+    num_filtered_data   = len(filtered_data)
+    num_data_removed = num_unfiltered_data - num_filtered_data
+
+    if num_data_removed > 0:
+        print(f"  {num_data_removed} URLs supressed, as already present in 'queries' database table")
+        
+    if not filtered_data:  # If all URLs already exist, return early
+        return
+
+    with get_cursor() as cursor:
+        for item in url_data:
+            query_id   = item['query_id']
+            type       = item['type']
+            url        = item['url']
+            url_hash   = item['url_hash']
+            downloaded = item['downloaded']
+            handled    = item['handled']
+
+            cursor.execute("""
+                INSERT INTO urls (query_id, type, url, url_hash, downloaded, handled)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (query_id,type,url,url_hash,downloaded,handled))
+
+        
 def set_query_as_handled(query_id):
     """Sets the handled flag of a query to True."""
     with get_cursor() as cursor:
@@ -360,22 +401,6 @@ def count_urls_per_query_type():
         """)
         result = cursor.fetchall()
     return dict(result)
-
-# **** XXXX
-# Not a thing for *queries* database table!!!
-# def count_downloaded_undownloaded_queries():
-#     with get_cursor() as cursor:
-#         cursor.execute("""
-#             SELECT handled, COUNT(*) as count
-#             FROM queries
-#             GROUP BY downloaded
-#         """)
-#         results = cursor.fetchall()
-#         output = {"undownloaded": 0, "downloaded": 0}
-#         for result in results:
-#             key = "undownloaded" if result[0] == 0 else "downloaded"
-#             output[key] = result[1]
-#         return output
 
 def count_handled_unhandled_queries():
     with get_cursor() as cursor:
@@ -919,6 +944,7 @@ def get_url_counts_by_query_id(lang, query_id):
             "para_lang_count": para_lang_count # Actually count of how many web pages have at least one lrl para (not the number of paras in total)
         }
 
+# **** XXXX YYYY
 def get_url_counts_by_type(lang, search_type):
     """
     Returns the total number of URLs, the number of unhandled URLs, and the number of URLs with a specific nlp_full_lang 

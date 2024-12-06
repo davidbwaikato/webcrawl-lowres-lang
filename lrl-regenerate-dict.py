@@ -65,7 +65,7 @@ if __name__ == "__main__":
 
     lang_initialcap = globals.args.lang.capitalize();
 
-    nlp_lang_supported = nlp.is_supported_lang(lang_uc)
+    nlp_lang_supported = nlp.is_lingua_supported_lang(lang_uc)
     
     if lang_detect_algorithm == enums.LangDetect.lingua and not nlp_lang_supported:
         print( "----",file=sys.stderr)

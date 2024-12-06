@@ -41,11 +41,21 @@ lingua_detector = LanguageDetectorBuilder.from_all_languages().with_preloaded_la
 #linguaLanguages = [Language.ENGLISH, Language.MAORI]
 #lingua_detector = LanguageDetectorBuilder.from_languages(*linguaLanguages).build()
 
-supported_uc_langs = [ lang.name for lang in Language.all()]
+supported_lingua_uc_langs = [ lang.name for lang in Language.all()]
 
-def is_supported_lang(lang):
+supported_lingua_uc_langs_lookup = {}
+for lang in Language.all():
+    supported_lingua_uc_langs_lookup[lang.name] = lang
+
+def is_lingua_supported_lang(lang):
     lang_uc = lang.upper()
-    return lang_uc in supported_uc_langs
+    return lang_uc in supported_lingua_uc_langs
+
+def get_lingua_lang_rec(lang):
+    lang_uc = lang.upper()
+    return supported_lingua_uc_langs_lookup[lang_uc]
+
+    
 
 def clean_text(text,reg_expr=r'\n{3,}',replace_str='\n\n'):
     # Replace instances where there are more than two consecutive newlines with just two.
@@ -309,11 +319,17 @@ def detect_para_language_lingua(text,detect_langname, nlp_lang_supported, lang_d
 def detect_language_lingua(text,  detect_langname, lang_dict_termvec_rec):
     """Detect language with confidence level using Lingua.py"""
 
-    nlp_lang_supported = is_supported_lang(detect_langname)
+    nlp_lang_supported = is_lingua_supported_lang(detect_langname)
     
     # Full-text level analysis
     lingua_fulllang_rec = lingua_detector.detect_language_of(text)
     lingua_fullconf = lingua_detector.compute_language_confidence(text, lingua_fulllang_rec)
+
+    if nlp_lang_supported:
+        lrl_lingua_lang_rec = get_lingua_lang_rec(detect_langname)        
+        lrl_lingua_fullconf = lingua_detector.compute_language_confidence(text, lrl_lingua_lang_rec)
+        print(f"**** !!!! top lang {lingua_fulllang_rec} ({lingua_fulllang_rec.name}): fullconf={lingua_fullconf}")
+        print(f"**** !!!! for lrl  {lrl_lingua_lang_rec} ({detect_langname}): fullconf={lrl_lingua_fullconf}")
 
     predicted_full_langname = None
     if lingua_fulllang_rec != None:
@@ -326,15 +342,18 @@ def detect_language_lingua(text,  detect_langname, lang_dict_termvec_rec):
     lrl_lingua_match_paras   = detect_info["lrl_lingua_match_paras"]
     lrl_termdist_match_paras = detect_info["lrl_termdist_match_paras"]
 
-    lrl_lingua_match_count = len(lrl_lingua_match_paras)
+    lrl_lingua_match_count   = len(lrl_lingua_match_paras)
+    lrl_termdist_match_count = len(lrl_termdist_match_paras)
+
+    lrl_match_count = lrl_lingua_match_count if (nlp_lang_supported) else lrl_termdist_match_count
     
-    lrl_para_percentage = (lrl_lingua_match_count / num_paras) * 100 if num_paras > 0 else 0
+    lrl_para_percentage = (lrl_match_count / num_paras) * 100 if num_paras > 0 else 0
       
     return {
         "full_lang": predicted_full_langname,
         "full_conf": round(lingua_fullconf, 2),
         "para_count": num_paras,
-        "para_count_lrl": lrl_lingua_match_count,
+        "para_count_lrl": lrl_match_count,
         "para_perc_lrl":  round(lrl_para_percentage, 2)
     }
 

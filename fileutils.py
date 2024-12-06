@@ -91,9 +91,9 @@ def hash_url(url):
     return hashlib.md5(url.encode()).hexdigest()
 
 
-def remove_blacklisted(urls, blacklist):
-    """Remove blacklisted domains from the list of URLs"""
-    return [url for url in urls if not any(domain in url for domain in blacklist)]
+def remove_excluded_domains(urls, excluded_domain_list):
+    """Remove excluded domains from the list of URLs"""
+    return [url for url in urls if not any(domain in url for domain in excluded_domain_list)]
 
 
 def get_download_filename_pair(downloads_dir,filehash,doctype):

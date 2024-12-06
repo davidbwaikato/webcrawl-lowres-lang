@@ -278,10 +278,14 @@ def download_and_save(url_id, url, download_with_selenium,apply_robots_txt, down
         print(f"Error getting file for {url}: {e}")        
         return 0
     
-def search_and_fetch(query, search_engine_type, num_pages=1, **kwargs):
+def search_and_fetch(query_row, search_engine_type, num_pages=1, **kwargs):
     """Fetch Google search results and update"""
-    query_id = query[0]
-    text = query[1]
+    # **** XXXX YYYY
+    #query_id = query_row[0]
+    #query_terms = query_row[1]
+    query_id = query_row['id']
+    query_terms = query_row['query']
+
     driver = None
 
     # Get where to save the data
@@ -299,16 +303,15 @@ def search_and_fetch(query, search_engine_type, num_pages=1, **kwargs):
     urls = []
     while count <= num_pages:
         if search_engine_type == const.GOOGLE:
-            temp = search.google(text, count)
+            temp = search.google(query_terms, count)
         elif search_engine_type == const.GOOGLE_SELENIUM:
-            temp = search.google_selenium(text, driver, count)
+            temp = search.google_selenium(query_terms, driver, count)
         elif search_engine_type == const.BING:
-            temp = search.bing(text, count)
+            temp = search.bing(query_terms, count)
         elif search_engine_type == const.BING_SELENIUM:
-            temp = search.bing_selenium(text, driver, count)
+            temp = search.bing_selenium(query_terms, driver, count)
         elif search_engine_type == const.GOOGLE_API:
-            temp = search.google_api(text, globals.config['google']['key'],
-                              globals.config['google']['cx'], count, **kwargs)
+            temp = search.google_api(query_terms, globals.config['google']['key'],globals.config['google']['cx'], count, **kwargs)
             if temp == 429:
                 print("Google API rate limit reached, exiting.")
                 stop_event.set()
@@ -322,45 +325,59 @@ def search_and_fetch(query, search_engine_type, num_pages=1, **kwargs):
     if driver:
         driver.quit()
 
-    # Remove blacklisted URLs
-    urls = fileutils.remove_blacklisted(urls, globals.config['blacklist'])
-    if len(urls) == 0:
+    # Remove URLs from domains on the exclusion-list
+    num_unfiltered_urls = len(urls)
+    urls = fileutils.remove_excluded_domains(urls, globals.config['excluded_domains'])
+    num_filtered_urls = len(urls)
+
+    num_removed_urls = num_unfiltered_urls - num_filtered_urls
+    if num_removed_urls > 0:
+        print(f"  {num_removed_urls} URL(s) filtered out by applying exclusion-list")
+
+    if num_filtered_urls == 0:
         return
 
     # Prepare the URL data for insertion
     # => not currently downloaded, so url downloaded=False and (nlp) handle=False
-          
-    url_data = [(query_id, engine, url, fileutils.hash_url(url), False, False) for url in urls]
+
+    # **** XXXX YYYY
+    #url_data = [(query_id, engine, url, fileutils.hash_url(url), False, False) for url in urls]
+    url_data = [{'query_id':query_id, 'type':engine, 'url':url, 'url_hash':fileutils.hash_url(url), 'downloaded':False, 'handled':False} for url in urls]
+
     # Insert URLs into the database (only the new ones)
-    # print(url_data)
     sql.insert_urls_many(url_data)
 
-def search_worker(sub_queries, search_engine_type, num_pages, tcount):
-    for query in sub_queries:
+def search_worker(sub_tablequeries_rows, search_engine_type, num_pages, tcount):
+    for query_row in sub_tablequeries_rows:
         # Check if the stop event is set
         if stop_event.is_set():
             return
 
         now = datetime.now()
-        print(f"Thread {tcount} ============ Search Stage @ {now.strftime('%H:%M:%S')} ============ query: {query}")
-        search_and_fetch(query, search_engine_type, num_pages)
+        print(f"Thread {tcount} ============ Search Stage @ {now.strftime('%H:%M:%S')} ============")
+        print(f"Storing DB query row: {[query_row[key] for key in query_row.keys()]}")
+        search_and_fetch(query_row, search_engine_type, num_pages)
 
         sleep_delay = globals.config['sleep_delay']
         randomized_sleep_delay = sleep_delay + random.randint(0,sleep_delay)
-        print(f"  pausing for {randomized_sleep_delay} secs")
+        print(f"  [pausing for {randomized_sleep_delay} secs]")
         time.sleep(randomized_sleep_delay)
 
         
-def download_worker(sub_urls, download_with_selenium,apply_robots_txt, tcount):
-    for url in sub_urls:
-        url_id         = url[0]
-        url_href       = url[3]
-        url_downloaded = url[7]
-        #url_handled    = url[8]
+def download_worker(sub_tableurls_rows, download_with_selenium,apply_robots_txt, tcount):
+    for url_row in sub_tableurls_rows:
+        #url_id         = url_row[0]
+        #url_href       = url_row[3]
+        #url_downloaded = url_row[7]
+        ##url_handled    = url_row[8]
+
+        # **** XXXX YYYY
+        url_id         = url_row['id']
+        url_href       = url_row['url']
+        url_downloaded = url_row['downloaded']
+        #url_handled    = url_row['handled']
         
         if url_downloaded == 1: # already downloaded
-            #print("{0}".format(url))
-            #print("{0} {1}".format(url[0], url[7]))
             print(f"Thread {tcount}: Skipping as already downloaded URL {url_href}")
             continue
         
@@ -383,16 +400,11 @@ def download_worker(sub_urls, download_with_selenium,apply_robots_txt, tcount):
             # If here, then result return is of the form
             #   {"path": filepath, "hash": file_hash, "doc_type": doc_type}
 
-            # *** XXXX can be removed??  but if uncomment check args passed in as 'downloaded' now added
-            #sql.update_url(url[0], result["hash"], result["doc_type"], langs["lingua"]["lang"], langs["lingua"]["confidence"], langs["lingua"]["percentage"])
-            # print("{0} {1} {2} HANDLED".format(tcount, url[0], @ now.strftime('%H:%M:%S')))
-
             url_filehash = result["hash"]
             url_doctype  = result["doc_type"]
             sql.update_url_fileinfo(url_id, url_filehash, url_doctype, downloaded=True) 
             
         except FileNotFoundError as e:
-            # print("{0} {1} {2} HANDLED".format(tcount, url[0], @ now.strftime('%H:%M:%S')))
             sql.set_url_as_handled(url_id)
             print(f"Thread {tcount} File not found")
         except Exception as e:
@@ -408,21 +420,25 @@ def nlp_reject_downloaded_file(url_id,downloads_dir,url_filehash,url_doctype,rea
     print(f"Thread {tcount} xxxxxxxxxxxx rejecting ({reason}) xxxxxxxxxxxx")
     fileutils.move_file(url_filepath_downloaded,url_filepath_rejected)
     
-def nlp_worker(sub_urls, lang_dict_termvec_rec, detect_name, tcount):
+def nlp_worker(sub_tableurls_rows, lang_dict_termvec_rec, detect_name, tcount):
 
     downloads_dir = globals.config['downloads_dir']
     
-    for url in sub_urls:
+    for url_row in sub_tableurls_rows:
 
-        url_id         = url[0]
-        url_href       = url[3]
-        url_filehash   = url[5]
-        url_doctype    = url[6]
-        url_handled    = url[8]
+        #url_id         = url_row[0]
+        #url_href       = url_row[3]
+        #url_filehash   = url_row[5]
+        #url_doctype    = url_row[6]
+        #url_handled    = url_row[8]
 
+        url_id         = url_row['id']
+        url_href       = url_row['url']
+        url_filehash   = url_row['file_hash']
+        url_doctype    = url_row['doc_type']        
+        url_handled    = url_row['handled']
+        
         if url_handled == 1: # already handled it
-            ##print("{0}".format(url))
-            ##print("{0} {1}".format(url[0], url[8]))
             print(f"Thread {tcount}: Skipping as already NLP-processed (handled) URL {url_href}")
             continue
 
@@ -585,23 +601,22 @@ if __name__ == "__main__":
         # Queries
         if globals.args.run_querygen or globals.args.run_all:
             print("Generating Queries.")
-            queries = queries.generate_all(lang_uc, word_count, query_count)
+            queries_array = queries.generate_all(lang_uc, word_count, query_count)
             
         # Search
         if globals.args.run_websearch or globals.args.run_all:
             print("Running Search.")
             # Get all relevant queries from the database
-            queries = sql.get_all_queries(lang_uc, handled=False)
+            tablequeries_rows = sql.get_all_queries(lang_uc, handled=False)
             # Split queries into sub-lists for each thread
-            split_queries = [queries[i::num_threads] for i in range(num_threads)]
+            split_tablequeries_rows = [tablequeries_rows[i::num_threads] for i in range(num_threads)]
             # Create and start threads
             threads = []
             print("Starting search threads.")
             tcount = 1
             
-            for sub_queries in split_queries:
-                t = threading.Thread(target=search_worker, args=(
-                    sub_queries, search_engine, num_pages, tcount))
+            for sub_tablequeries_rows in split_tablequeries_rows:
+                t = threading.Thread(target=search_worker, args=(sub_tablequeries_rows, search_engine, num_pages, tcount))
                 threads.append(t)
                 t.start()
                 tcount += 1
@@ -614,25 +629,27 @@ if __name__ == "__main__":
 
             # Set query as handled
             print("Setting queries as handled.")
-            for query in queries:
-                sql.set_query_as_handled(query[0])
+            for tablequeries_row in tablequeries_rows:
+                # **** XXXX YYYY
+                #sql.set_query_as_handled(query[0])
+                sql.set_query_as_handled(tablequeries_row['id'])
             print("All Search-threads have finished.")
 
         # Download
         if globals.args.run_download or globals.args.run_all:
             # Get all relevant queries from the database
-            urls = sql.get_all_urls_filter_downloaded(downloaded=False)
-            print(f"Number of urls to be downloaded: {len(urls)}")
+            tableurls_rows = sql.get_all_urls_filter_downloaded(downloaded=False)
+            print(f"Number of urls to be downloaded: {len(tableurls_rows)}")
             # Split queries into sub-lists for each thread
-            split_urls = [urls[i::num_threads] for i in range(num_threads)]
+            split_tableurls_rows = [tableurls_rows[i::num_threads] for i in range(num_threads)]
 
             # Create and start threads
             threads = []
             print("Starting nlp threads.")
             tcount = 1
-            for sub_urls in split_urls:
+            for sub_tableurls_rows in split_tableurls_rows:
                 t = threading.Thread(target=download_worker, args=(
-                    sub_urls, globals.args.download_with_selenium,globals.args.apply_robots_txt,tcount))
+                    sub_tableurls_rows, globals.args.download_with_selenium,globals.args.apply_robots_txt,tcount))
                 threads.append(t)
                 t.start()
                 tcount += 1
@@ -649,18 +666,18 @@ if __name__ == "__main__":
             lang_dict_termvec_rec = fileutils.load_language_dictionary_vector(lang)
             
             # Get all relevant queries from the database
-            urls = sql.get_all_urls_filter_downloaded_handled(downloaded=True,handled=False) 
-            print(f"Number of urls to be processed by NLP: {len(urls)}")
+            tableurls_rows = sql.get_all_urls_filter_downloaded_handled(downloaded=True,handled=False) 
+            print(f"Number of urls to be processed by NLP: {len(tableurls_rows)}")
 
             # Split queries into sub-lists for each thread
-            split_urls = [urls[i::num_threads] for i in range(num_threads)]
+            split_tableurls_rows = [tableurls_rows[i::num_threads] for i in range(num_threads)]
 
             # Create and start threads
             threads = []
             print("Starting nlp threads.")
             tcount = 1
-            for sub_urls in split_urls:
-                t = threading.Thread(target=nlp_worker, args=(sub_urls, lang_dict_termvec_rec, globals.lang_uc, tcount))
+            for sub_tableurls_rows in split_tableurls_rows:
+                t = threading.Thread(target=nlp_worker, args=(sub_tableurls_rows, lang_dict_termvec_rec, globals.lang_uc, tcount))
                 threads.append(t)
                 t.start()
                 tcount += 1

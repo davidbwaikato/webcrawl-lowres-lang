@@ -1,4 +1,8 @@
 
+
+* Put udhr on blacklist
+* Change name used for blacklist
+
 * Have config option for loading in English full dict and removing any matches
 * Have config option for remove all matches that occur between the different UDHRs?
 
@@ -14,6 +18,11 @@
 * Not currently triggering on parachunk is specified on config.json
 
 =====
+
+ download_and_save(), url_id=5
+  url=https://research.cs.wisc.edu/zhu/s/TTP/nlp/nlp/nlp/nltk/data/corpora/udhr/Tonga-Latin1
+Error getting file for https://research.cs.wisc.edu/zhu/s/TTP/nlp/nlp/nlp/nltk/data/corpora/udhr/Tonga-Latin1: argument of type 'NoneType' is not iterable
+
 
 Para chunk:
 Ono ki te Waru  

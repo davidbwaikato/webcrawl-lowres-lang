@@ -1,11 +1,14 @@
 
 import const
+import globals
 import sql
 
 def stats(lang_uc):
     print(f"--- Query Statistics for Language: {lang_uc} ---\n")
 
     lang_ic = lang_uc.capitalize()
+
+    verbose = globals.verbose
     
     # Print total Queries with their types
     print("--- Query Counts by Type ---")
@@ -77,111 +80,118 @@ def stats(lang_uc):
 
     #domain_results = sql.get_domain_counts(lang_uc)
     domain_results = sql.get_domain_counts_lrlparacount()
+
     # Sort the domains by total URLs and get the top and bottom 10
     sorted_domains = sorted(domain_results['domains'].items(), key=lambda x: x[1], reverse=True)
     top_10_domains = sorted_domains[:10]
     bottom_10_domains = sorted_domains[-10:]
 
-    print(f"--- Top 10 Domains by Total URLs ---")
-    for domain, count in top_10_domains:
-        print(f"Domain: {domain}, Total URLs: {count}")
+    if verbose > 1:
+        print(f"--- Top 10 Domains by Total URLs ---")
+        for domain, count in top_10_domains:
+            print(f"Domain: {domain}, Total URLs: {count}")
 
-    print(f"\n--- Bottom 10 Domains by Total URLs ---")
-    for domain, count in bottom_10_domains:
-        print(f"Domain: {domain}, Total URLs: {count}")
+        print(f"\n--- Bottom 10 Domains by Total URLs ---")
+        for domain, count in bottom_10_domains:
+            print(f"Domain: {domain}, Total URLs: {count}")
 
-    # Sort the language-specific domains by Maori URLs and get the top 10
-    sorted_language_domains = sorted(domain_results['language_domains'].items(), key=lambda x: x[1], reverse=True)
-    top_10_language_domains = sorted_language_domains[:10]
-    bottom_10_language_domains = sorted_language_domains[-10:]
-    print(f"\n--- Top 10 Domains by {lang_ic} URLs ---")
-    for domain, count in top_10_language_domains:
-        print(f"Domain: {domain}, {lang_ic} URLs: {count}")
-    print(f"\n--- Bottom 10 Domains by Total URLs ---")
-    for domain, count in bottom_10_language_domains:
-        print(f"Domain: {domain}, Total URLs: {count}")
-    print("\n")
+        # Sort the language-specific domains by Maori URLs and get the top 10
+        sorted_language_domains = sorted(domain_results['language_domains'].items(), key=lambda x: x[1], reverse=True)
+        top_10_language_domains = sorted_language_domains[:10]
+        bottom_10_language_domains = sorted_language_domains[-10:]
+        print(f"\n--- Top 10 Domains by {lang_ic} URLs ---")
+        for domain, count in top_10_language_domains:
+            print(f"Domain: {domain}, {lang_ic} URLs: {count}")
+        print(f"\n--- Bottom 10 Domains by Total URLs ---")
+        for domain, count in bottom_10_language_domains:
+            print(f"Domain: {domain}, Total URLs: {count}")
+        print("\n")
 
-    # Confidence and Paragraph Analysis
-    print("--- Confidence and Paragraph Analysis ---")
-    print("--- URLs with Low Confidence ---")
-    #low_confidence = sql.count_low_confidence_urls(lang_uc)
-    low_confidence = sql.count_low_confidence_urls_lrlparacount()
-    print(f"Total URLs with Low Confidence: {low_confidence.get('total_low_confidence', 0)}")
-    print("Top 5 Lowest Confidence URLs:")
-    for url_info in low_confidence.get('top_5_lowest_confidence', []):
-        print(f"URL: {url_info[0]}, Confidence: {url_info[1]}")
-    print("\n--- URLs with High Confidence ---")
-    #high_confidence = sql.count_high_confidence_urls(lang_uc)
-    high_confidence = sql.count_high_confidence_urls_lrlparacount()
-    print(f"Total URLs with High Confidence: {high_confidence.get('total_high_confidence', 0)}")
-    print("Top 5 Highest Confidence URLs:")
-    for url_info in high_confidence.get('top_5_highest_confidence', []):
-        print(f"URL: {url_info[0]}, Confidence: {url_info[1]}")
-    print("\n--- URLs with Low Paragraph Percentage and Low Confidence ---")
-    #low_para_low_conf = sql.count_low_para_percent_low_confidence_urls(lang_uc)
-    low_para_low_conf = sql.count_low_para_percent_low_confidence_urls_lrlparacount()
-    print(f"Total: {low_para_low_conf.get('total_low_para_percent_low_confidence', 0)}")
-    print("Top 5 Lowest Paragraph Percentage and Low Confidence URLs:")
-    for url_info in low_para_low_conf.get('top_5_lowest_para_percent_low_confidence', []):
-        print(f"URL: {url_info[0]}, Paragraph Percentage: {url_info[1]}, Confidence: {url_info[2]}")
-    print("\n--- URLs with High Paragraph Percentage and High Confidence ---")
-    #high_para_high_conf = sql.count_high_para_percent_high_confidence_urls(lang_uc)
-    high_para_high_conf = sql.count_high_para_percent_high_confidence_urls_lrlparacount()
-    print(f"Total: {high_para_high_conf.get('total_high_para_percent_high_confidence', 0)}")
-    print("Top 5 Highest Paragraph Percentage and High Confidence URLs:")
-    for url_info in high_para_high_conf.get('top_5_highest_para_percent_high_confidence', []):
-        print(f"URL: {url_info[0]}, Paragraph Percentage: {url_info[1]}, Confidence: {url_info[2]}")
-    print("\n")
+    if verbose > 1:
+        # Confidence and Paragraph Analysis
+        print("--- Confidence and Paragraph Analysis ---")
+        print("--- URLs with Low Confidence ---")
+        #low_confidence = sql.count_low_confidence_urls(lang_uc)
+        low_confidence = sql.count_low_confidence_urls_lrlparacount()
+        print(f"Total URLs with Low Confidence: {low_confidence.get('total_low_confidence', 0)}")
+        print("Top 5 Lowest Confidence URLs:")
+        for url_info in low_confidence.get('top_5_lowest_confidence', []):
+            print(f"URL: {url_info[0]}, Confidence: {url_info[1]}")
+        print("\n--- URLs with High Confidence ---")
+        #high_confidence = sql.count_high_confidence_urls(lang_uc)
+        high_confidence = sql.count_high_confidence_urls_lrlparacount()
+        print(f"Total URLs with High Confidence: {high_confidence.get('total_high_confidence', 0)}")
+        print("Top 5 Highest Confidence URLs:")
+        for url_info in high_confidence.get('top_5_highest_confidence', []):
+            print(f"URL: {url_info[0]}, Confidence: {url_info[1]}")
+        print("\n--- URLs with Low Paragraph Percentage and Low Confidence ---")
+        #low_para_low_conf = sql.count_low_para_percent_low_confidence_urls(lang_uc)
+        low_para_low_conf = sql.count_low_para_percent_low_confidence_urls_lrlparacount()
+        print(f"Total: {low_para_low_conf.get('total_low_para_percent_low_confidence', 0)}")
+        print("Top 5 Lowest Paragraph Percentage and Low Confidence URLs:")
+        for url_info in low_para_low_conf.get('top_5_lowest_para_percent_low_confidence', []):
+            print(f"URL: {url_info[0]}, Paragraph Percentage: {url_info[1]}, Confidence: {url_info[2]}")
+        print("\n--- URLs with High Paragraph Percentage and High Confidence ---")
+        #high_para_high_conf = sql.count_high_para_percent_high_confidence_urls(lang_uc)
+        high_para_high_conf = sql.count_high_para_percent_high_confidence_urls_lrlparacount()
+        print(f"Total: {high_para_high_conf.get('total_high_para_percent_high_confidence', 0)}")
+        print("Top 5 Highest Paragraph Percentage and High Confidence URLs:")
+        for url_info in high_para_high_conf.get('top_5_highest_para_percent_high_confidence', []):
+            print(f"URL: {url_info[0]}, Paragraph Percentage: {url_info[1]}, Confidence: {url_info[2]}")
+        print("\n")
 
-    # Confidence Ranges
-    print("Confidence Ranges")
-    #range_results = sql.count_urls_by_confidence_and_paragraph_percentage_ranges(lang_uc)
-    range_results = sql.count_urls_by_confidence_and_paragraph_percentage_ranges_lrlparacount()
-    print("--- URL Counts by Confidence Range ---")
-    for range, count in range_results['confidence'].items():
-        print(f"Confidence Range {range}: {count} URLs")
+        # Confidence Ranges
+        print("Confidence Ranges")
+        #range_results = sql.count_urls_by_confidence_and_paragraph_percentage_ranges(lang_uc)
+        range_results = sql.count_urls_by_confidence_and_paragraph_percentage_ranges_lrlparacount()
+        print("--- URL Counts by Confidence Range ---")
+        for range, count in range_results['confidence'].items():
+            print(f"Confidence Range {range}: {count} URLs")
 
-    print("\n--- URL Counts by Paragraph Percentage Range ---")
-    for range, count in range_results['paragraph'].items():
-        print(f"Paragraph Percentage Range {range}: {count} URLs")
-    print("\n")
+        print("\n--- URL Counts by Paragraph Percentage Range ---")
+        for range, count in range_results['paragraph'].items():
+            print(f"Paragraph Percentage Range {range}: {count} URLs")
+        print("\n")
 
     # Search Types Statistics
     print("--- Search Type Statistics ---")
     queries = sql.get_all_queries(lang_uc)
-    g_urls = sql.get_url_counts_by_type(lang_uc, const.GOOGLE)
+    num_queries = len(queries)
+    
+    g_urls  = sql.get_url_counts_by_type(lang_uc, const.GOOGLE)
     ga_urls = sql.get_url_counts_by_type(lang_uc, const.GOOGLE_API)
-    b_urls = sql.get_url_counts_by_type(lang_uc, const.BING)
+    b_urls  = sql.get_url_counts_by_type(lang_uc, const.BING)
     ba_urls = sql.get_url_counts_by_type(lang_uc, const.BING_API)
+
     total = g_urls["total_count"] + ga_urls["total_count"] + \
         b_urls["total_count"] + ba_urls["total_count"]
+
     lang_total = g_urls["para_lang_count"] + ga_urls["para_lang_count"] + \
         b_urls["para_lang_count"] + ba_urls["para_lang_count"]
 
     print(f"--- Google ---")
     print("Total Urls:", g_urls["total_count"])
     print("Not-Downloaded Urls:", g_urls["undownloaded_count"])
-    print("NLP-Unhandled Urls :", g_urls["unhandled_count"])
+    #print("NLP-Unhandled Urls :", g_urls["unhandled_count"])
     print(f"Para {lang_ic} Urls:", g_urls["para_lang_count"])
     print("\n--- Google API ---")
     print("Total Urls:", ga_urls["total_count"])
     print("Not-Downloaded Urls:", ga_urls["undownloaded_count"])
-    print("NLP-Unhandled Urls :", ga_urls["unhandled_count"])
+    #print("NLP-Unhandled Urls :", ga_urls["unhandled_count"])
     print(f"Para {lang_ic} Urls:", ga_urls["para_lang_count"])
 
     print("\n--- Bing ---")
     print("Total Urls:", b_urls["total_count"])
     print("Not-Downloaded Urls:", b_urls["undownloaded_count"])
-    print("NLP-Unhandled Urls :", b_urls["unhandled_count"])
+    #print("NLP-Unhandled Urls :", b_urls["unhandled_count"])
     print(f"Para {lang_ic} Urls:", b_urls["para_lang_count"])
     print("\n--- Bing API ---")
     print("Total Urls:", ba_urls["total_count"])
     print("Not-Downloaded Urls:", ba_urls["undownloaded_count"])
-    print("NLP-Unhandled Urls :", ba_urls["unhandled_count"])
+    #print("NLP-Unhandled Urls :", ba_urls["unhandled_count"])
     print(f"Para {lang_ic} Urls:", ba_urls["para_lang_count"])
 
     print(f"\n--- Overall Total for {lang_ic} ---")
-    print("Total Queries:", len(queries))
+    print("Total Queries:", num_queries)
     print("Total Urls:", total)
     print(f"Total {lang_ic} Urls:", lang_total)

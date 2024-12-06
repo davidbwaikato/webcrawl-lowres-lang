@@ -16,15 +16,24 @@ import globals
 def display_resultset_info(url,num_result_items,full_text):
 
     if (num_result_items > 0):
-        print(f"  Extracting document links from {num_result_items} returned matching items")
+        print(f"  {num_result_items} result-set blocks extracted from returned search-engine result page")
     else:
-        print(f"  No matching documents returned for query URL:")
-        print(f"    {url}")
+        print(f"  0 result-set blocks extracted from the result page returned by the search-engine query")
+        print(f"      Query Url: {url}")
         if (globals.verbose > 1):
             print("----")
             print(full_text[:globals.verbose*100])
             print("----")
 
+def display_resultlink_info(url,link_items):
+
+    num_link_items = len(link_items)
+    if (num_link_items > 0):
+        print(f"  {num_link_items} document link(s) extracted from returned search-engine result page")
+    else:
+        print(f"  0 documents links extracted from the result page returned by the search-engine query")
+        print(f"      Query URL: {url}")
+            
             
 def google(query,  page=1):
     """Fetch results from Google"""
@@ -47,7 +56,8 @@ def google(query,  page=1):
     soup = BeautifulSoup(response.text, 'html.parser')
     result_items = soup.find_all('div',  {'class': 'g'})
 
-    display_resultset_info(url,len(result_items),soup.get_text(separator=" "))
+    num_result_items = len(result_items)
+    display_resultset_info(url,num_result_items,soup.get_text(separator=" "))
     
     urls = []
     for g in result_items:
@@ -60,7 +70,10 @@ def google(query,  page=1):
                 urls.append(str(link))
             else:
                 print(f"  Skipping extracted anchor, as it had no 'href' link")
-                
+
+    if (num_result_items>0):
+        display_resultlink_info(url,urls)
+    
     return urls
 
 
@@ -78,7 +91,9 @@ def google_selenium(query, driver, page=1):
 
         full_text = driver.find_element(By.XPATH, "/html/body").text        
         result_divs = driver.find_elements(By.CSS_SELECTOR, "div.g")
-        display_resultset_info(url,len(result_divs),full_text)
+
+        num_result_divs = len(result_divs)
+        display_resultset_info(url,num_result_divs,full_text)
         
         urls = []
 
@@ -86,6 +101,10 @@ def google_selenium(query, driver, page=1):
             anchor = result_div.find_elements(By.CSS_SELECTOR, "a")
             link = anchor[0].get_attribute("href")
             urls.append(str(link))
+            
+        if (num_result_items>0):            
+            display_resultlink_info(url,urls)
+            
         return urls
     except Exception as e:
         print(f"An error occurred: {e}")
@@ -103,7 +122,7 @@ def google_api(query, api_key, cx, page, **kwargs):
         print(f"google_api(): 'cx' credentials is set of '{cx}'. Have you edit config.json to provide your Google credentials?")
         return []
 
-    print(f"Running Google API for: {query}, page {page}")
+    print(f"Running Google API for: {query_encoded}, page {page}")
     start = (page - 1) * 10
     base_url = "https://www.googleapis.com/customsearch/v1"
     params = {
@@ -197,8 +216,9 @@ def bing(query,  page=1):
     soup = BeautifulSoup(response.text, 'html.parser')
     result_items = [h2 for h2 in (li.find('h2') for li in soup.find_all('li', {'class': 'b_algo'})) if h2]
 
-    display_resultset_info(url,len(result_items),soup.get_text(separator=" "))
-    
+    num_result_items = len(result_items)    
+    display_resultset_info(url,num_result_items,soup.get_text(separator=" "))
+            
     urls = []
     for g in result_items:
         anchors = g.find_all('a')
@@ -210,6 +230,8 @@ def bing(query,  page=1):
             else:
                 print(f"  Skipping extracted anchor, as it had no 'href' link")
 
+    if (num_result_items>0):
+        display_resultlink_info(url,urls)
 
     processed_urls = bing_base64_decode(urls)
     
@@ -234,7 +256,9 @@ def bing_selenium(query, driver, page=1):
         full_text = driver.find_element(By.XPATH, "/html/body").text        
         #result_divs = driver.find_elements(By.CSS_SELECTOR, "div.tpcn")
         result_divs = driver.find_elements(By.CSS_SELECTOR, "li.b_algo h2")
-        display_resultset_info(url,len(result_divs),full_text)
+
+        num_result_divs = len(result_divs)
+        display_resultset_info(url,num_result_divs,full_text)
         
         urls = []
         for result_div in result_divs:
@@ -242,7 +266,11 @@ def bing_selenium(query, driver, page=1):
             link = anchor[0].get_attribute("href")
             urls.append(str(link))
             
-        processed_urls = bing_base64_decode(urls)                
+        if (num_result_divs>0):
+            display_resultlink_info(url,urls)
+
+        processed_urls = bing_base64_decode(urls)
+        
         return processed_urls
     
     except Exception as e:
