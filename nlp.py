@@ -53,7 +53,10 @@ def is_lingua_supported_lang(lang):
 
 def get_lingua_lang_rec(lang):
     lang_uc = lang.upper()
-    return supported_lingua_uc_langs_lookup[lang_uc]
+
+    lang_rec = supported_lingua_uc_langs_lookup.get(lang_uc,None)
+
+    return lang_rec 
 
     
 
@@ -104,12 +107,41 @@ def extract_text_from_file(filepath, doc_type):
         print(f"Unsupported doc_type: {doc_type}")
         return None
 
-def convert_text_to_parachunks(text, min_para_word_len, min_parachunk_word_len=None):
+def convert_text_to_paras(text, min_para_word_len):
+    """Return array of paragraphs to run language detection over"""
+
+    #if (globals.verbose >= 5):
+    #    verbose_char_len = globals.verbose*50
+    #    print(f"++++ convert_text_to_paras() text[:{verbose_char_len}] ++++")
+    #    print(text[:verbose_char_len])
+    #    print("++++")
+
+
+    paras = text_to_clean_paras(text)
+
+    if (globals.verbose >= 4):
+        verbose_numpara_len = globals.verbose*10
+        print(f"++++ convert_text_to_paras() paras[:{verbose_numpara_len}] ++++")
+        print(f"{paras[:verbose_numpara_len]}")
+        print("++++")
+        
+    
+    processed_paras = []
+
+    for para in paras:
+        para_words = para.split()
+        if (len(para_words) > min_para_word_len):
+            # enough words to include/be processed
+            processed_paras.append(para)
+        
+    return processed_paras
+
+def convert_text_to_parachunks(text, min_parachunk_word_len):
     """Gets optimal sized chunks to run paragraph language detection for"""
 
     #if (globals.verbose >= 5):
     #    verbose_char_len = globals.verbose*50
-    #    print(f"++++ process_text_in_chunks() text[:{verbose_char_len}] ++++")
+    #    print(f"++++ convert_text_to_parachunks() text[:{verbose_char_len}] ++++")
     #    print(text[:verbose_char_len])
     #    print("++++")
 
@@ -125,32 +157,18 @@ def convert_text_to_parachunks(text, min_para_word_len, min_parachunk_word_len=N
     
     processed_paras = []
     
-    if (min_para_word_len != None):
-        for para in paras:
-            # **** XXXX
-            #if para.isspace():
-            #    continue
-            para_words = para.split()
-            if (len(para_words) > min_para_word_len):
-                # enough words to include/be processed
-                #para = para.strip()
-                processed_paras.append(para)
-        
-    else:
-        para_cat = ""
+    para_cat = ""
 
-        for para in paras:
-            #if para.isspace():
-            #    continue
-            para_cat = para_cat + para + '\n'
-            para_cat_words = para_cat.split()
-            if (len(para_cat_words) > min_parachunk_word_len):
-                # enough concatenated words to include/be processed
-                #para_cat = para_cat.strip()            
-                processed_paras.append(para_cat)
-                para_cat = ""
+    for para in paras:
+        para_cat = para_cat + para + '\n'
+        para_cat_words = para_cat.split()
+        if (len(para_cat_words) > min_parachunk_word_len):
+            # enough concatenated words to include/be processed
+            processed_paras.append(para_cat)
+            para_cat = ""
             
     return processed_paras
+
 
 # def detect_language_spacy(text):
 #     doc = nlp(text)
@@ -243,18 +261,29 @@ def detect_para_language_lingua(text,detect_langname, nlp_lang_supported, lang_d
     on 'lang_dict_termvec_rec' and (if 'nlp_lang_supported') the Lingua-based one
     """
 
-    min_para_word_len = globals.config['nlp'].get('min_para_word_len',None)
-    min_para_confidence = globals.config['nlp'].get('min_para_confidence',None)
+    min_lingua_para_word_len     = globals.config['nlp']['min_lingua_para_word_len']
+    min_lingua_para_confidence   = globals.config['nlp']['min_lingua_para_confidence']
+
+    min_termdist_para_word_len   = globals.config['nlp']['min_termdist_para_word_len']
+    min_termdist_para_confidence = globals.config['nlp']['min_termdist_para_confidence']
+
+    #min_termdist_para_word_len = globals.config['nlp'].get('min_termdist_para_word_len',None)
+
+    #min_para_confidence = globals.config['nlp'].get('min_para_confidence',None)
 
     min_parachunk_word_len = globals.config['nlp'].get('min_parachunk_word_len',None)
-    min_parachunk_confidence = globals.config['nlp'].get('min_parachunk_confidence',None)
+    #min_parachunk_confidence = globals.config['nlp'].get('min_parachunk_confidence',None)
 
-    min_termdist_confidence = globals.config['nlp']['min_termdist_confidence']
+    #min_termdist_confidence = globals.config['nlp']['min_termdist_confidence']
+
+    min_para_word_len = min_lingua_para_word_len if nlp_lang_supported else min_termdist_para_word_len
     
-    para_chunks = convert_text_to_parachunks(text,min_para_word_len,min_parachunk_word_len)
+    paras = convert_text_to_paras(text,min_para_word_len)
+    # **** Future Proofing idea
+    #paras = convert_text_to_parachunks(text,min_parachunk_word_len)
     
-    # Process each chunk and count paragraphs
-    num_para_chunks = len(para_chunks)
+    # Process each paragraph and count language detection results
+    num_paras = len(paras)
 
     lrl_lingua_match_count  = 0
     lrl_lingua_match_paras  = []
@@ -263,53 +292,69 @@ def detect_para_language_lingua(text,detect_langname, nlp_lang_supported, lang_d
     lrl_termdist_match_paras  = []
 
     lrl_agreement_match_paras = []
-    
-    for para_chunk in para_chunks:
-        lingua_paralang_rec = lingua_detector.detect_language_of(para_chunk)
-        lingua_para_confidence = lingua_detector.compute_language_confidence(para_chunk, lingua_paralang_rec)
 
-        termdist_para_confidence = termdist_compute_language_confidence(para_chunk,lang_dict_termvec_rec)
+    lrl_lingua_lang_rec = get_lingua_lang_rec(detect_langname)        
+
+    for para in paras:
+        if nlp_lang_supported:
+            lrl_lingua_para_confidence = lingua_detector.compute_language_confidence(para, lrl_lingua_lang_rec)
+
+            if lrl_lingua_para_confidence > min_lingua_para_confidence:
+                lrl_lingua_para_langname = detect_langname
+            else:
+                lrl_lingua_para_langname = f"NON-{detect_langname}"
+                lrl_lignua_para_confidende = 0.0            
+        else:
+            lrl_lingua_para_langname = "<UNDEFINED>"
+            lrl_lingua_para_confidence = 0.0
+            
+        # Can always calculate the Cosine-Similarity
+        lrl_termdist_para_confidence = termdist_compute_language_confidence(para,lang_dict_termvec_rec)
 
         show_para = False
         
         if (globals.verbose >= 2):
-            #print(f"----\n    Para block:\n----\n{para_chunk}\n----\n")
+            #print(f"==== LRL Cosine Similarity match  ({lrl_termdist_para_confidence}) ====")            
             show_para = True
             
-        if (globals.verbose > 1):            
-            print(f"    Para predicted language = {lingua_paralang_rec.name} (confidence={lingua_para_confidence}) (low-resoure language cosine similarity score={termdist_para_confidence})")
-            print("====")
-            show_para = True
+        #if (globals.verbose > 1):            
+        #    print(f"    LRL lrl_para_confidence={lrl_lingua_para_confidence}) (low-resoure language cosine similarity score={lrl_termdist_para_confidence})")
+        #    print("====")
+        #    show_para = True
             
-        if termdist_para_confidence >= min_termdist_confidence:
-            print(f"==== LRL Cosine Similarity match  ({termdist_para_confidence}) ====")            
+        if lrl_termdist_para_confidence >= min_termdist_para_confidence:
+            print(f"==== LRL Cosine Similarity match  ({lrl_termdist_para_confidence}) ====")
             lrl_termdist_match_count += 1
-            lrl_termdist_match_paras.append(para_chunk)
+            lrl_termdist_match_paras.append(para)
             show_para = True
             
         if nlp_lang_supported:
-            if lingua_paralang_rec.name == detect_langname and lingua_para_confidence >= min_para_confidence:
-                print(f"==== LRL NLP Lingua match         ({lingua_para_confidence}) ====")            
+            #if lingua_paralang_rec.name == detect_langname and lingua_para_confidence >= min_para_confidence:
+            if lrl_lingua_para_confidence >= min_lingua_para_confidence:
+                    
+                print(f"==== LRL NLP Lingua match         ({lrl_lingua_para_confidence}) ====")            
+                ##print(f"==== LRL Cosine Similarity match  ({lrl_termdist_para_confidence}) ====")            
                 lrl_lingua_match_count += 1
-                lrl_lingua_match_paras.append(para_chunk)
+                lrl_lingua_match_paras.append(para)
                 show_para = True
                 
-            if lingua_paralang_rec.name == detect_langname and lingua_para_confidence >= min_para_confidence and termdist_para_confidence >= min_termdist_confidence:
-                lrl_agreement_match_paras.append(para_chunk)
+            #if lingua_paralang_rec.name == detect_langname and lingua_para_confidence >= min_para_confidence and lrl_termdist_para_confidence >= min_termdist_para_confidence:
+            if lrl_lingua_para_confidence >= min_lingua_para_confidence and lrl_termdist_para_confidence >= min_termdist_para_confidence:                
+                lrl_agreement_match_paras.append(para)
                 show_para = True
                 
         if show_para:
             print( "----")
-            print(para_chunk)
+            print(para)
             print( "----")
             print()
                         
-    print(f"  Paras: lrl_termdist_match_count = {lrl_termdist_match_count} out of {num_para_chunks}")
+    print(f"  Paras: lrl_termdist_match_count = {lrl_termdist_match_count} out of {num_paras}")
     if nlp_lang_supported:    
-        print(f"         lrl_lingua_match_count   = {lrl_lingua_match_count} out of {num_para_chunks}") 
+        print(f"         lrl_lingua_match_count   = {lrl_lingua_match_count} out of {num_paras}") 
     
     return {
-        "num_paras"                 : num_para_chunks,
+        "num_paras"                 : num_paras,
         "lrl_lingua_match_paras"    : lrl_lingua_match_paras,
         "lrl_termdist_match_paras"  : lrl_termdist_match_paras,
         "lrl_agreement_match_paras" : lrl_agreement_match_paras
@@ -322,18 +367,32 @@ def detect_language_lingua(text,  detect_langname, lang_dict_termvec_rec):
     nlp_lang_supported = is_lingua_supported_lang(detect_langname)
     
     # Full-text level analysis
-    lingua_fulllang_rec = lingua_detector.detect_language_of(text)
-    lingua_fullconf = lingua_detector.compute_language_confidence(text, lingua_fulllang_rec)
-
+    predicted_full_langname = None
+    lrl_lingua_fullconf = 0.0
+        
+    min_lingua_full_confidence = globals.config['nlp']['min_lingua_full_confidence']
+        
     if nlp_lang_supported:
+        #lingua_fulllang_rec = lingua_detector.detect_language_of(text)
+        #lingua_fullconf = lingua_detector.compute_language_confidence(text, lingua_fulllang_rec)
+        
         lrl_lingua_lang_rec = get_lingua_lang_rec(detect_langname)        
         lrl_lingua_fullconf = lingua_detector.compute_language_confidence(text, lrl_lingua_lang_rec)
-        print(f"**** !!!! top lang {lingua_fulllang_rec} ({lingua_fulllang_rec.name}): fullconf={lingua_fullconf}")
-        print(f"**** !!!! for lrl  {lrl_lingua_lang_rec} ({detect_langname}): fullconf={lrl_lingua_fullconf}")
 
-    predicted_full_langname = None
-    if lingua_fulllang_rec != None:
-        predicted_full_langname = lingua_fulllang_rec.name
+        if lrl_lingua_fullconf > min_lingua_full_confidence:
+            predicted_full_langname = detect_langname
+        else:
+            predicted_full_langname = f"NON-{detect_langname}"
+            lrl_lignua_fullconf = 0.0
+    else:
+        predicted_full_langname = "<UNDEFINED>"
+        lrl_lingua_fullconf = 0.0
+    
+    # **** XXXX    
+    #if lingua_fulllang_rec != None:
+    #    predicted_full_langname = lingua_fulllang_rec.name
+    #else:
+    #    predicted_full_langname = "<UNDEFINED>"
         
     # Paragraph-level analysis    
     detect_info = detect_para_language_lingua(text,detect_langname, nlp_lang_supported, lang_dict_termvec_rec)
@@ -351,7 +410,7 @@ def detect_language_lingua(text,  detect_langname, lang_dict_termvec_rec):
       
     return {
         "full_lang": predicted_full_langname,
-        "full_conf": round(lingua_fullconf, 2),
+        "full_conf": round(lrl_lingua_fullconf, 2),
         "para_count": num_paras,
         "para_count_lrl": lrl_match_count,
         "para_perc_lrl":  round(lrl_para_percentage, 2)

@@ -24,6 +24,13 @@
 Error getting file for https://research.cs.wisc.edu/zhu/s/TTP/nlp/nlp/nlp/nltk/data/corpora/udhr/Tonga-Latin1: argument of type 'NoneType' is not iterable
 
 
+Thread 1 ============ Download Stage @ 18:11:41 ============ URL id 4
+  download_and_save(), url_id=4
+  url=https://www.govt.nz/assets/Documents/OTS/Ngai-Tuhoe/Ngai-Tuhoe-Deed-of-Settlement-4-Jun-2013.pdf
+Error getting file for https://www.govt.nz/assets/Documents/OTS/Ngai-Tuhoe/Ngai-Tuhoe-Deed-of-Settlement-4-Jun-2013.pdf: no such column: download_failed
+
+
+
 Para chunk:
 Ono ki te Waru  
 Phrases to use between  

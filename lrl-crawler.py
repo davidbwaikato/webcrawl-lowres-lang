@@ -217,13 +217,18 @@ def download_and_save(url_id, url, download_with_selenium,apply_robots_txt, down
         
         response = requests.get(url, verify=False, timeout=url_timeout, allow_redirects=True)
         if response.status_code != 200:
+            print(f"  URL request returned status code: {response.status_code}")
+            sql.set_url_download_as_failed(url_id)
             return 0
-        
-        response_content = None
 
         # Identify the content type
         content_type = response.headers.get('content-type')
-        if "html" in content_type:
+        
+        if content_type == None:
+            # Web server didn't provide 'content-type' in header => assume HTML
+            # (but note, might actually be something like plain-text)
+            doc_type = "html" 
+        elif "html" in content_type:
             doc_type = "html"
         elif "pdf" in content_type:
             doc_type = "pdf"
@@ -275,7 +280,9 @@ def download_and_save(url_id, url, download_with_selenium,apply_robots_txt, down
         print("Request timed out: ", url)
         return 0
     except Exception as e:
-        print(f"Error getting file for {url}: {e}")        
+        print(f"Error getting file for {url}: {e}")
+        if (globals.verbose > 2):            
+            print(traceback.format_exc())        
         return 0
     
 def search_and_fetch(query_row, search_engine_type, num_pages=1, **kwargs):
@@ -514,7 +521,7 @@ def nlp_worker(sub_tableurls_rows, lang_dict_termvec_rec, detect_name, tcount):
         except Exception as e:
             sql.set_url_as_handled(url_id)
             print(f"Thread {tcount} Error in NLP: {e}")
-            if (globals.verbose > 2):
+            if (globals.verbose > 0):
                 print(traceback.format_exc())
         
 def validate_args(args):

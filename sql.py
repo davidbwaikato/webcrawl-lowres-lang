@@ -54,6 +54,7 @@ def create(reset=False):
             file_hash TEXT,
             doc_type TEXT,
             downloaded BOOLEAN DEFAULT 0,
+            downloaded_failed BOOLEAN DEFAULT 0,
             handled BOOLEAN DEFAULT 0,
             nlp_full_lang TEXT,
             nlp_full_confidence INTEGER,
@@ -262,6 +263,15 @@ def set_url_as_downloaded(url_id):
             WHERE id = ?
         """, (url_id,))
 
+def set_url_download_as_failed(url_id):
+    """Sets the downloaded_failed flag of a url to True."""
+    with get_cursor() as cursor:
+        cursor.execute("""
+            UPDATE urls
+            SET downloaded_failed = True
+            WHERE id = ?
+        """, (url_id,))
+        
 def set_url_as_handled(url_id):
     """Sets the handled flag of a url to True."""
     with get_cursor() as cursor:
@@ -954,18 +964,31 @@ def get_url_counts_by_type(lang, search_type):
         search_type = search_type.replace("_selenium", "")
     with get_cursor() as cursor:
         # Join queries and urls tables, then filter by lang and search type
+        # cursor.execute("""
+        #     SELECT 
+        #         COUNT(*) as total_count,
+        #         SUM(CASE WHEN u.downloaded = 0 THEN 1 ELSE 0 END) as undownloaded_count,
+        #         SUM(CASE WHEN u.handled = 0 THEN 1 ELSE 0 END) as unhandled_count,
+        #         SUM(CASE WHEN u.nlp_full_lang = ? THEN 1 ELSE 0 END) as full_lang_count,
+        #         SUM(CASE WHEN u.nlp_para_count_lrl > 0 THEN 1 ELSE 0 END) as full_lang_count
+        #     FROM queries q
+        #     JOIN urls u on q.id = u.query_id
+        #     WHERE q.lang = ? AND u.type = ?
+        # """, (lang, lang, search_type))
+
         cursor.execute("""
             SELECT 
                 COUNT(*) as total_count,
                 SUM(CASE WHEN u.downloaded = 0 THEN 1 ELSE 0 END) as undownloaded_count,
                 SUM(CASE WHEN u.handled = 0 THEN 1 ELSE 0 END) as unhandled_count,
                 SUM(CASE WHEN u.nlp_full_lang = ? THEN 1 ELSE 0 END) as full_lang_count,
-                SUM(CASE WHEN u.nlp_para_count_lrl > 0 THEN 1 ELSE 0 END) as full_lang_count
+                SUM(CASE WHEN u.nlp_para_count_lrl > 0 THEN 1 ELSE 0 END) as para_lang_count
             FROM queries q
             JOIN urls u on q.id = u.query_id
-            WHERE q.lang = ? AND u.type = ?
-        """, (lang, lang, search_type))
+            WHERE u.type = ?
+        """, (lang,search_type))
 
+        # **** XXXX YYYY
         result = cursor.fetchone()
         undownloaded = 0
         if result[1] is not None:
@@ -985,7 +1008,7 @@ def get_url_counts_by_type(lang, search_type):
             "undownloaded_count": unhandled,
             "unhandled_count": unhandled,
             "full_lang_count": full_lang,
-            "para_lang_count": full_lang
+            "para_lang_count": para_lang
         }
     
 # def get_top_queries_with_most_urls(lang):
