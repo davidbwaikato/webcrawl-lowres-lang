@@ -1,5 +1,6 @@
 
-import const
+#import const
+import enums
 import globals
 import sql
 
@@ -158,10 +159,10 @@ def stats(lang_uc):
     queries = sql.get_all_queries(lang_uc)
     num_queries = len(queries)
     
-    g_urls  = sql.get_url_counts_by_type(lang_uc, const.GOOGLE)
-    ga_urls = sql.get_url_counts_by_type(lang_uc, const.GOOGLE_API)
-    b_urls  = sql.get_url_counts_by_type(lang_uc, const.BING)
-    ba_urls = sql.get_url_counts_by_type(lang_uc, const.BING_API)
+    g_urls  = sql.get_url_counts_by_type(lang_uc, enums.SearchEngineType.GOOGLE.value)
+    ga_urls = sql.get_url_counts_by_type(lang_uc, enums.SearchEngineType.GOOGLE_API.value)
+    b_urls  = sql.get_url_counts_by_type(lang_uc, enums.SearchEngineType.BING.value)
+    ba_urls = sql.get_url_counts_by_type(lang_uc, enums.SearchEngineType.BING_API.value)
 
     total = g_urls["total_count"] + ga_urls["total_count"] + \
         b_urls["total_count"] + ba_urls["total_count"]

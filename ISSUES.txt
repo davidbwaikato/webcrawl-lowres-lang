@@ -12,13 +12,12 @@
 * PDF text extract looks to be struggling with macrons
 
 * Support text/plain as one of the download times
- 
-* Implement bing_api?
+
+* Currently no way to trigger parachunking in config file
 
 * Support of other NLP lang id tools (e.g. FastText)
 
 
-* Not currently triggering on parachunk is specified on config.json
 
 =====
 

@@ -6,6 +6,7 @@ import hashlib
 import os
 import random
 import requests
+import sys
 import shutil
 import threading
 import time
@@ -28,7 +29,8 @@ ssl._create_default_https_context = ssl._create_unverified_context
 
 # LRL specific modules
 
-import const
+#import const
+import enums
 import globals
 
 import display
@@ -58,7 +60,9 @@ def get_args():
                         help=f"how many words are used in a 'combined', 'phrase', and 'common_uncommon' generated query [Config Default={globals.config['word_count']}]")
     parser.add_argument("-qc", "--query_count", type=int, default=globals.config['query_count'],
                         help=f"how many queries of each type (single, combine, phrase, common_uncommon) are generated [Config Default={globals.config['query_count']}]")
-    parser.add_argument("-se", "--search_engine", default=globals.config['search_engine'],
+    #parser.add_argument("-se", "--search_engine", default=globals.config['search_engine'],
+    #                    help=f"search engine used [Config Default={globals.config['search_engine']}]")
+    parser.add_argument("-se", "--search_engine", type=enums.SearchEngineType, choices=list(enums.SearchEngineType), default=globals.config['search_engine'],
                         help=f"search engine used [Config Default={globals.config['search_engine']}]")
     parser.add_argument("-dws", "--download_with_selenium", action="store_true",
                         default=False, help=f"use Selenium-controlled web browser for page downloads [Default=False]")
@@ -201,7 +205,8 @@ def download_and_save(url_id, url, download_with_selenium,apply_robots_txt, down
             # where it can, however (emperically) it is still a binary string
             # at this point and needs to be encoded for hashlib.sha256() to work
             response_content = driver.page_source.encode("utf-8")
-            # print(f"Selenium encoded: {response_content[:300]}")
+            #print(f"**** Selenium encoded: {response_content[:300]}")
+
             driver.quit();
         else:
             response_content = response.content
@@ -241,32 +246,38 @@ def search_and_fetch(query_row, search_engine_type, num_pages=1, **kwargs):
     driver = None
 
     # Get where to save the data
-    if search_engine_type == const.GOOGLE_SELENIUM or search_engine_type == const.BING_SELENIUM:
+    if search_engine_type == enums.SearchEngineType.GOOGLE_SELENIUM or search_engine_type == enums.SearchEngineType.BING_SELENIUM:
         driver_type = globals.config['driver_type']    
         driver = seleniumutils.create_driver(driver_type)
 
-    if search_engine_type == const.GOOGLE_SELENIUM:
-        engine = const.GOOGLE
-    elif search_engine_type == const.BING_SELENIUM:
-        engine = const.BING
+    if search_engine_type == enums.SearchEngineType.GOOGLE_SELENIUM:
+        engine = enums.SearchEngineType.GOOGLE
+    elif search_engine_type == enums.SearchEngineType.BING_SELENIUM:
+        engine = enums.SearchEngineType.BING
     else:
         engine = search_engine_type
 
     count = 1
     urls = []
     while count <= num_pages:
-        if search_engine_type == const.GOOGLE:
+        if search_engine_type == enums.SearchEngineType.GOOGLE:
             temp = search.google(query_terms, count)
-        elif search_engine_type == const.GOOGLE_SELENIUM:
+        elif search_engine_type == enums.SearchEngineType.GOOGLE_SELENIUM:
             temp = search.google_selenium(query_terms, driver, count)
-        elif search_engine_type == const.BING:
+        elif search_engine_type == enums.SearchEngineType.BING:
             temp = search.bing(query_terms, count)
-        elif search_engine_type == const.BING_SELENIUM:
+        elif search_engine_type == enums.SearchEngineType.BING_SELENIUM:
             temp = search.bing_selenium(query_terms, driver, count)
-        elif search_engine_type == const.GOOGLE_API:
+        elif search_engine_type == enums.SearchEngineType.GOOGLE_API:
             temp = search.google_api(query_terms, globals.config['google']['key'],globals.config['google']['cx'], count, **kwargs)
             if temp == 429:
                 print("Google API rate limit reached, exiting.")
+                stop_event.set()
+                return
+        elif search_engine_type == enums.SearchEngineType.BING_API:
+            temp = search.bing_api(query_terms, globals.config['google']['key'], count, **kwargs)
+            if temp == 429:
+                print("Bing API rate limit reached, exiting.")
                 stop_event.set()
                 return
         if not temp:
@@ -293,7 +304,7 @@ def search_and_fetch(query_row, search_engine_type, num_pages=1, **kwargs):
     # Prepare the URL data for insertion
     # => not currently downloaded, so url downloaded=False and (nlp) handle=False
 
-    url_data = [{'query_id':query_id, 'type':engine, 'url':url, 'url_hash':fileutils.hash_url(url), 'downloaded':False, 'handled':False} for url in urls]
+    url_data = [{'query_id':query_id, 'type':engine.value, 'url':url, 'url_hash':fileutils.hash_url(url), 'downloaded':False, 'handled':False} for url in urls]
 
     # Insert URLs into the database (only the new ones)
     sql.insert_urls_many(url_data)
@@ -359,7 +370,7 @@ def download_worker(sub_tableurls_rows, download_with_selenium,apply_robots_txt,
                 print(traceback.format_exc())
 
 
-def nlp_reject_downloaded_file(url_id,downloads_dir,url_filehash,url_doctype,reason):
+def nlp_reject_downloaded_file(url_id,downloads_dir,url_filehash,url_doctype,reason,tcount):
     sql.set_url_as_handled(url_id)
     url_filepath_downloaded,url_filepath_rejected = fileutils.get_download_filename_pair(downloads_dir,url_filehash,url_doctype)
     print(f"Thread {tcount} xxxxxxxxxxxx rejecting ({reason}) xxxxxxxxxxxx")
@@ -409,17 +420,17 @@ def nlp_worker(sub_tableurls_rows, lang_dict_termvec_rec, detect_name, tcount):
             
             extracted_text = nlp.extract_text_from_file(url_filepath, url_doctype)
             if extracted_text == None:
-                nlp_reject_downloaded_file(url_id,downloads_dir,url_filehash,url_doctype,"no extracted text")
+                nlp_reject_downloaded_file(url_id,downloads_dir,url_filehash,url_doctype,"no extracted text",tcount)
                 continue
             cleaned_extracted_text = nlp.clean_text(extracted_text)
             # Guard against the cleaned text now being nothing but 100% whitespace
             if cleaned_extracted_text.isspace():
-                nlp_reject_downloaded_file(url_id,downloads_dir,url_filehash,url_doctype,"text all whitespace")
+                nlp_reject_downloaded_file(url_id,downloads_dir,url_filehash,url_doctype,"text all whitespace",tcount)
                 continue            
 
             langs = nlp.run_nlp_algorithms(cleaned_extracted_text,globals.lang_uc, lang_dict_termvec_rec)
             if langs["lingua"]["full_lang"] == None:
-                nlp_reject_downloaded_file(url_id,downloads_dir,url_filehash,url_doctype,"NLP failed to detect language")
+                nlp_reject_downloaded_file(url_id,downloads_dir,url_filehash,url_doctype,"NLP failed to detect language",tcount)
                 continue
 
             # If reached this point, then NLP has made a language prediction (full page and per para)
@@ -440,12 +451,12 @@ def nlp_worker(sub_tableurls_rows, lang_dict_termvec_rec, detect_name, tcount):
             # Previous test from Sulhan
             #if langs["lingua"]["full_lang"] != detect_name:
             #    nlp_reject_downloaded_file(url_id,downloads_dir,url_filehash,url_doctype,
-            #                               f"detected {langs['lingua']['full_lang'].capitalize()} != {detect_name.capitalize()}")
+            #                               f"detected {langs['lingua']['full_lang'].capitalize()} != {detect_name.capitalize()},tcount")
             
             if nlp_para_count_lrl == 0:
                 # No lrl language text                
                 nlp_reject_downloaded_file(url_id,downloads_dir,url_filehash,url_doctype,
-                                           f"NLP did not detected any paragraphs in {detect_name.capitalize()} language")            
+                                           f"NLP did not detected any paragraphs in {detect_name.capitalize()} language",tcount)            
 
         except FileNotFoundError as e:
             sql.set_url_as_handled(url_id)
@@ -465,8 +476,8 @@ def validate_args(args):
                     f"Expected a positive integer, but got: {arg}")
             
         # Validate search_engine
-        valid_search_engine_types = [const.GOOGLE, const.GOOGLE_API, const.GOOGLE_SELENIUM,
-                                     const.BING,   const.BING_API,   const.BING_SELENIUM]
+        valid_search_engine_types = [enums.SearchEngineType.GOOGLE, enums.SearchEngineType.GOOGLE_API, enums.SearchEngineType.GOOGLE_SELENIUM,
+                                     enums.SearchEngineType.BING,   enums.SearchEngineType.BING_API,   enums.SearchEngineType.BING_SELENIUM]
         if globals.args.search_engine and globals.args.search_engine not in valid_search_engine_types:
             raise ValueError(
                 f"Invalid search type provided: {globals.args.search_engine}. Valid options are: {valid_search_engine_types}")
@@ -537,7 +548,7 @@ if __name__ == "__main__":
             display.stats(lang_uc)
             exit(0)
 
-        if search_engine == const.GOOGLE_SELENIUM or search_engine == const.BING_SELENIUM:            
+        if search_engine == enums.SearchEngineType.GOOGLE_SELENIUM or search_engine == enums.SearchEngineType.BING_SELENIUM:            
             driver_type = globals.config['driver_type']
             seleniumutils.init_manager(driver_type)
         
@@ -580,7 +591,9 @@ if __name__ == "__main__":
         if globals.args.run_download or globals.args.run_all:
             # Get all relevant queries from the database
             tableurls_rows = sql.get_all_urls_filter_downloaded(downloaded=False)
+            print( "++++")
             print(f"Number of urls to be downloaded: {len(tableurls_rows)}")
+            print( "++++")
             # Split queries into sub-lists for each thread
             split_tableurls_rows = [tableurls_rows[i::num_threads] for i in range(num_threads)]
 
@@ -612,7 +625,7 @@ if __name__ == "__main__":
 
             # Split queries into sub-lists for each thread
             split_tableurls_rows = [tableurls_rows[i::num_threads] for i in range(num_threads)]
-
+            
             # Create and start threads
             threads = []
             print("Starting nlp threads.")
@@ -622,6 +635,7 @@ if __name__ == "__main__":
                 threads.append(t)
                 t.start()
                 tcount += 1
+
             # Wait for all threads to finish
             for t in threads:
                 if stop_event.is_set():

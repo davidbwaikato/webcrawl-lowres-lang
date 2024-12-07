@@ -306,7 +306,7 @@ def detect_para_language_lingua(text,detect_langname, nlp_lang_supported, lang_d
 
         show_para = False
         
-        if (globals.verbose >= 2):
+        if (globals.verbose >= 3):
             show_para = True
             
         if lrl_termdist_para_confidence >= min_termdist_para_confidence:

@@ -71,7 +71,7 @@ def google(query,  page=1):
             else:
                 print(f"  Skipping extracted anchor, as it had no 'href' link")
 
-    if (num_result_items>0):
+    if (num_result_items > 0):
         display_resultlink_info(url,urls)
     
     return urls
@@ -102,7 +102,7 @@ def google_selenium(query, driver, page=1):
             link = anchor[0].get_attribute("href")
             urls.append(str(link))
             
-        if (num_result_items>0):            
+        if (num_result_divs > 0):            
             display_resultlink_info(url,urls)
             
         return urls
@@ -123,7 +123,7 @@ def google_api(query, api_key, cx, page, **kwargs):
         return []
 
     print(f"Running Google API for: {query_encoded}, page {page}")
-    start = (page - 1) * 10
+    start = (page - 1) * 10 + 1 # ChatGPT indicated the '+1' was needed
     base_url = "https://www.googleapis.com/customsearch/v1"
     params = {
         'q': query,
@@ -230,7 +230,7 @@ def bing(query,  page=1):
             else:
                 print(f"  Skipping extracted anchor, as it had no 'href' link")
 
-    if (num_result_items>0):
+    if (num_result_items > 0):
         display_resultlink_info(url,urls)
 
     processed_urls = bing_base64_decode(urls)
@@ -266,7 +266,7 @@ def bing_selenium(query, driver, page=1):
             link = anchor[0].get_attribute("href")
             urls.append(str(link))
             
-        if (num_result_divs>0):
+        if (num_result_divs > 0):
             display_resultlink_info(url,urls)
 
         processed_urls = bing_base64_decode(urls)
@@ -276,18 +276,52 @@ def bing_selenium(query, driver, page=1):
     except Exception as e:
         print(f"An error occurred: {e}")
         return []
+    
 
-    
-def bing_api(query, api_key, cx, page, **kwargs):
-    """Fetch results from Bing using the API"""
-    print(f"Currently not implemented: Bing API for: {query}, page {page}")
+def bing_api(query, api_key, page, **kwargs):
+    """Fetch results from Bing using the API."""
 
-    #if (re.match(r'^\?+$',api_key)):
-    #    print(f"bing_api(): 'api_key' is set of '{api_key}'. Have you edit config.json to provide your Bing key?")
-    #    return []
+    # The following is based on the google_api function, using ChatGPT to produce the Bing API search version
     
-    #if (re.match(r'^\?$',cx)):
-    #    print(f"binge_api(): 'cx' credentials is set to '{cx}'. Have you edit config.json to provide your Bing credentials?")
-    #    return []
+    # Validate API key
+    if re.match(r'^\?+$', api_key):
+        print(f"bing_api(): 'api_key' is set to '{api_key}'. Have you updated config.json to provide your Bing API key?")
+        return []
     
-    return []
+    # Encode the query
+    query_encoded = query.replace(' ', '+')
+    print(f"Running Bing API for: {query_encoded}, page {page}")
+    
+    # Calculate offset for pagination
+    count = 10  # Bing returns 10 results per page by default
+    offset = (page - 1) * count
+    
+    # Base URL for Bing Search API
+    base_url = "https://api.bing.microsoft.com/v7.0/search"
+    
+    # Request parameters
+    headers = {
+        'Ocp-Apim-Subscription-Key': api_key
+    }
+    params = {
+        'q': query,
+        'count': count,
+        'offset': offset,
+        **kwargs  # Additional parameters
+    }
+    
+    # Send request
+    try:
+        response = requests.get(base_url, headers=headers, params=params)
+        response.raise_for_status()  # Raise exception for HTTP errors
+    except requests.exceptions.RequestException as e:
+        print(f"Request failed: {e}")
+        return []
+    
+    # Parse results
+    urls = []
+    items = response.json().get('webPages', {}).get('value', [])
+    for item in items:
+        urls.append(item.get('url'))  # Use `.get()` to avoid KeyError
+    return urls
+

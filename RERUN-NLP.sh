@@ -2,4 +2,10 @@
 
 lang=${1:-maori}
 
-./lrl-crawler.py -snu $lang  && ./lrl-crawler.py -rn  --num_threads 1 -v 3 $lang
+if [ "x$EXTRA_ARGS" = "x" ] ; then
+    echo "----"
+    echo "To provide additional command-line arguments, Set the variable EXTRA_ARGS"
+    echo "----"
+fi
+
+./lrl-crawler.py -snu $lang  && ./lrl-crawler.py --run_nlp  --num_threads 1 $EXTRA_ARGS $lang
