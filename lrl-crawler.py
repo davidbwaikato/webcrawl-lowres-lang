@@ -60,8 +60,6 @@ def get_args():
                         help=f"how many words are used in a 'combined', 'phrase', and 'common_uncommon' generated query [Config Default={globals.config['word_count']}]")
     parser.add_argument("-qc", "--query_count", type=int, default=globals.config['query_count'],
                         help=f"how many queries of each type (single, combine, phrase, common_uncommon) are generated [Config Default={globals.config['query_count']}]")
-    #parser.add_argument("-se", "--search_engine", default=globals.config['search_engine'],
-    #                    help=f"search engine used [Config Default={globals.config['search_engine']}]")
     parser.add_argument("-se", "--search_engine", type=enums.SearchEngineType, choices=list(enums.SearchEngineType), default=globals.config['search_engine'],
                         help=f"search engine used [Config Default={globals.config['search_engine']}]")
     parser.add_argument("-us", "--use_selenium", action="store_true",
@@ -246,17 +244,9 @@ def search_and_fetch(query_row, search_engine_type,use_selenium, num_pages=1, **
     driver = None
 
     # Get where to save the data
-    #if search_engine_type == enums.SearchEngineType.GOOGLE_SELENIUM or search_engine_type == enums.SearchEngineType.BING_SELENIUM:
     if use_selenium:
         driver_type = globals.config['driver_type']    
         driver = seleniumutils.create_driver(driver_type)
-
-    #if search_engine_type == enums.SearchEngineType.GOOGLE_SELENIUM:
-    #    engine = enums.SearchEngineType.GOOGLE
-    #elif search_engine_type == enums.SearchEngineType.BING_SELENIUM:
-    #    engine = enums.SearchEngineType.BING
-    #else:
-    #    engine = search_engine_type
 
     count = 1
     urls = []
@@ -477,11 +467,6 @@ def validate_args(args):
                     f"Expected a positive integer, but got: {arg}")
             
         # Validate search_engine
-        # **** XXXX
-        #valid_search_engine_types = [enums.SearchEngineType.GOOGLE, enums.SearchEngineType.GOOGLE_API, enums.SearchEngineType.GOOGLE_SELENIUM,
-        #                             enums.SearchEngineType.BING,   enums.SearchEngineType.BING_API,   enums.SearchEngineType.BING_SELENIUM]
-        #valid_search_engine_types = [enums.SearchEngineType.GOOGLE, enums.SearchEngineType.GOOGLE_API,
-        #                             enums.SearchEngineType.BING,   enums.SearchEngineType.BING_API]
         valid_search_engine_types = list(enums.SearchEngineType)
         
         if globals.args.search_engine and globals.args.search_engine not in valid_search_engine_types:
