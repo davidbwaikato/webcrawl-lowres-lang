@@ -14,6 +14,7 @@ fi
 rm -rf querydownloads-$lang.db downloads-$lang \
     && ./lrl-crawler.py \
 	   --run_all \
+	   --exclude_english_lexicon \
 	   --query_count 1 \
 	   --search_engine google \
 	   --num_threads 1 --num_pages 1 \
