@@ -238,9 +238,6 @@ def download_and_save(url_id, url, download_with_selenium,apply_robots_txt, down
     
 def search_and_fetch(query_row, search_engine_type, num_pages=1, **kwargs):
     """Fetch Google search results and update"""
-    # **** XXXX YYYY
-    #query_id = query_row[0]
-    #query_terms = query_row[1]
     query_id = query_row['id']
     query_terms = query_row['query']
 
@@ -299,8 +296,6 @@ def search_and_fetch(query_row, search_engine_type, num_pages=1, **kwargs):
     # Prepare the URL data for insertion
     # => not currently downloaded, so url downloaded=False and (nlp) handle=False
 
-    # **** XXXX YYYY
-    #url_data = [(query_id, engine, url, fileutils.hash_url(url), False, False) for url in urls]
     url_data = [{'query_id':query_id, 'type':engine, 'url':url, 'url_hash':fileutils.hash_url(url), 'downloaded':False, 'handled':False} for url in urls]
 
     # Insert URLs into the database (only the new ones)
@@ -325,12 +320,7 @@ def search_worker(sub_tablequeries_rows, search_engine_type, num_pages, tcount):
         
 def download_worker(sub_tableurls_rows, download_with_selenium,apply_robots_txt, tcount):
     for url_row in sub_tableurls_rows:
-        #url_id         = url_row[0]
-        #url_href       = url_row[3]
-        #url_downloaded = url_row[7]
-        ##url_handled    = url_row[8]
 
-        # **** XXXX YYYY
         url_id         = url_row['id']
         url_href       = url_row['url']
         url_downloaded = url_row['downloaded']
@@ -593,8 +583,6 @@ if __name__ == "__main__":
             # Set query as handled
             print("Setting queries as handled.")
             for tablequeries_row in tablequeries_rows:
-                # **** XXXX YYYY
-                #sql.set_query_as_handled(query[0])
                 sql.set_query_as_handled(tablequeries_row['id'])
             print("All Search-threads have finished.")
 
