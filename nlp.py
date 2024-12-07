@@ -267,14 +267,7 @@ def detect_para_language_lingua(text,detect_langname, nlp_lang_supported, lang_d
     min_termdist_para_word_len   = globals.config['nlp']['min_termdist_para_word_len']
     min_termdist_para_confidence = globals.config['nlp']['min_termdist_para_confidence']
 
-    #min_termdist_para_word_len = globals.config['nlp'].get('min_termdist_para_word_len',None)
-
-    #min_para_confidence = globals.config['nlp'].get('min_para_confidence',None)
-
     min_parachunk_word_len = globals.config['nlp'].get('min_parachunk_word_len',None)
-    #min_parachunk_confidence = globals.config['nlp'].get('min_parachunk_confidence',None)
-
-    #min_termdist_confidence = globals.config['nlp']['min_termdist_confidence']
 
     min_para_word_len = min_lingua_para_word_len if nlp_lang_supported else min_termdist_para_word_len
     
@@ -314,13 +307,7 @@ def detect_para_language_lingua(text,detect_langname, nlp_lang_supported, lang_d
         show_para = False
         
         if (globals.verbose >= 2):
-            #print(f"==== LRL Cosine Similarity match  ({lrl_termdist_para_confidence}) ====")            
             show_para = True
-            
-        #if (globals.verbose > 1):            
-        #    print(f"    LRL lrl_para_confidence={lrl_lingua_para_confidence}) (low-resoure language cosine similarity score={lrl_termdist_para_confidence})")
-        #    print("====")
-        #    show_para = True
             
         if lrl_termdist_para_confidence >= min_termdist_para_confidence:
             print(f"==== LRL Cosine Similarity match  ({lrl_termdist_para_confidence}) ====")
@@ -329,16 +316,13 @@ def detect_para_language_lingua(text,detect_langname, nlp_lang_supported, lang_d
             show_para = True
             
         if nlp_lang_supported:
-            #if lingua_paralang_rec.name == detect_langname and lingua_para_confidence >= min_para_confidence:
             if lrl_lingua_para_confidence >= min_lingua_para_confidence:
                     
                 print(f"==== LRL NLP Lingua match         ({lrl_lingua_para_confidence}) ====")            
-                ##print(f"==== LRL Cosine Similarity match  ({lrl_termdist_para_confidence}) ====")            
                 lrl_lingua_match_count += 1
                 lrl_lingua_match_paras.append(para)
                 show_para = True
                 
-            #if lingua_paralang_rec.name == detect_langname and lingua_para_confidence >= min_para_confidence and lrl_termdist_para_confidence >= min_termdist_para_confidence:
             if lrl_lingua_para_confidence >= min_lingua_para_confidence and lrl_termdist_para_confidence >= min_termdist_para_confidence:                
                 lrl_agreement_match_paras.append(para)
                 show_para = True
@@ -373,9 +357,6 @@ def detect_language_lingua(text,  detect_langname, lang_dict_termvec_rec):
     min_lingua_full_confidence = globals.config['nlp']['min_lingua_full_confidence']
         
     if nlp_lang_supported:
-        #lingua_fulllang_rec = lingua_detector.detect_language_of(text)
-        #lingua_fullconf = lingua_detector.compute_language_confidence(text, lingua_fulllang_rec)
-        
         lrl_lingua_lang_rec = get_lingua_lang_rec(detect_langname)        
         lrl_lingua_fullconf = lingua_detector.compute_language_confidence(text, lrl_lingua_lang_rec)
 
@@ -388,12 +369,6 @@ def detect_language_lingua(text,  detect_langname, lang_dict_termvec_rec):
         predicted_full_langname = "<UNDEFINED>"
         lrl_lingua_fullconf = 0.0
     
-    # **** XXXX    
-    #if lingua_fulllang_rec != None:
-    #    predicted_full_langname = lingua_fulllang_rec.name
-    #else:
-    #    predicted_full_langname = "<UNDEFINED>"
-        
     # Paragraph-level analysis    
     detect_info = detect_para_language_lingua(text,detect_langname, nlp_lang_supported, lang_dict_termvec_rec)
     

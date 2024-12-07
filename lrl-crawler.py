@@ -11,9 +11,6 @@ import threading
 import time
 import traceback
 
-#from fake_useragent import UserAgent
-#from selenium import webdriver
-
 from lingua import Language
 requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
 
@@ -324,7 +321,6 @@ def download_worker(sub_tableurls_rows, download_with_selenium,apply_robots_txt,
         url_id         = url_row['id']
         url_href       = url_row['url']
         url_downloaded = url_row['downloaded']
-        #url_handled    = url_row['handled']
         
         if url_downloaded == 1: # already downloaded
             print(f"Thread {tcount}: Skipping as already downloaded URL {url_href}")
@@ -374,12 +370,6 @@ def nlp_worker(sub_tableurls_rows, lang_dict_termvec_rec, detect_name, tcount):
     downloads_dir = globals.config['downloads_dir']
     
     for url_row in sub_tableurls_rows:
-
-        #url_id         = url_row[0]
-        #url_href       = url_row[3]
-        #url_filehash   = url_row[5]
-        #url_doctype    = url_row[6]
-        #url_handled    = url_row[8]
 
         url_id         = url_row['id']
         url_href       = url_row['url']

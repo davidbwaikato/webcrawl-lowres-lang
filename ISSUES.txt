@@ -1,7 +1,10 @@
 
 
-* Put udhr on blacklist
-* Change name used for blacklist
+* eliminate all words in all UDHR files present ???
+
+* eliminate all English doubleups
+
+* change search enginge to enum
 
 * Have config option for loading in English full dict and removing any matches
 * Have config option for remove all matches that occur between the different UDHRs?
