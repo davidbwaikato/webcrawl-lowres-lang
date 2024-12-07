@@ -2,6 +2,7 @@ import json
 import random
 
 import fileutils
+import globals
 import sql
 
 
@@ -53,15 +54,39 @@ def order_and_remove_duplicates(queries):
         tuple(sorted(item["query"].split())): item["type"] for item in queries}
     return [{"query": " ".join(query), "type": sorted_queries[query]} for query in sorted_queries]
 
+def exclude_english_lexicon(lrl_word_dict):
+    english_word_dict = fileutils.load_english_dictionary_ref()
 
-def generate_all(lang_uc, word_count=3, query_count=5):
+    if globals.verbose >= 2:
+        print(f"  Size of low-resource language word_dict before English exclusion: {len(lrl_word_dict)}")
+    
+    for en_word in english_word_dict.keys():
+        if en_word in lrl_word_dict:
+            if globals.verbose >= 3:
+                print(f"  Excluding: {en_word}")
+            del lrl_word_dict[en_word]
+
+    if globals.verbose >= 2:
+        print(f"  Size of low-resource language word_dict after English exclusion: {len(lrl_word_dict)}")
+
+
+def generate_all(lang_uc, exclude_english_lexicon_option, word_count, query_count):
     """Create all types of queries for a language"""
-    print("Creating queries.")
+    lang_lc = lang_uc.lower()
+    lang_ic = lang_uc.capitalize()
+    
+    print(f"  Loading frequency-based dictionary for {lang_ic}")    
     word_dict = fileutils.load_language_dictionary(lang_uc)
     
     if word_dict is None:
-        print(f"Unigram frequency dictionary for '{lang_uc.lower()}' not found")
+        print(f"Unigram frequency dictionary for '{lang_ic}' language not found")
         exit(1)
+
+    if exclude_english_lexicon_option:
+        print("  Excluding English lexicon")
+        exclude_english_lexicon(word_dict)
+        
+    print("  Generating  queries")
         
     queries = []
     queries.extend(combined_word_queries(word_dict, 1, query_count))

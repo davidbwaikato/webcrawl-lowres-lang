@@ -60,6 +60,7 @@ def get_args():
                         help=f"how many words are used in a 'combined', 'phrase', and 'common_uncommon' generated query [Config Default={globals.config['word_count']}]")
     parser.add_argument("-qc", "--query_count", type=int, default=globals.config['query_count'],
                         help=f"how many queries of each type (single, combine, phrase, common_uncommon) are generated [Config Default={globals.config['query_count']}]")
+
     parser.add_argument("-se", "--search_engine", type=enums.SearchEngineType, choices=list(enums.SearchEngineType), default=globals.config['search_engine'],
                         help=f"search engine used [Config Default={globals.config['search_engine']}]")
     parser.add_argument("-us", "--use_selenium", action="store_true",
@@ -67,15 +68,16 @@ def get_args():
     parser.add_argument("-art", "--apply_robots_txt", action="store_true",
                         default=False, help=f"use this option to turn on the robots.txt check (note: as the pages 'lrl-crawler.py' detects have been located via a web search engine, the identified download page has already been crawled, making it a reasonable assumption for 'lrl-crawler.pl' to skip this check, which is why it off by default) [Default=False]")
 
-    parser.add_argument("-nt", "--num_threads", type=int, default=globals.config['num_threads'],
-                        help=f"the number of threads that are used to run the querying and NLP processsing stages [Config Default={globals.config['num_threads']}]")
 
-# The following is not currently supported
-#    parser.add_argument("-sp", "--start_page", type=int, default=0,
-#                        help=f"effectively, how many search result pages to skip over before processing results [Default=0]")
+    # The following is not currently supported
+    # parser.add_argument("-sp", "--start_page", type=int, default=0,
+    #                    help=f"effectively, how many search result pages to skip over before processing results [Default=0]")
     parser.add_argument("-np", "--num_pages", type=int, default=globals.config['num_pages'],
                         help=f"number of pages of search results to process (x 4, for each query type) [Config Default={globals.config['num_pages']}]")
 
+    parser.add_argument("-nt", "--num_threads", type=int, default=globals.config['num_threads'],
+                        help=f"the number of threads that are used to run the querying and NLP processsing stages [Config Default={globals.config['num_threads']}]")
+    
     parser.add_argument("-ra", "--run_all", action="store_true",
                         default=False, help="flag to run all stages: query generation, perform web searches, download result sets, and run NLP over the downloaded files")
     parser.add_argument("-rqg", "--run_querygen", action="store_true",
@@ -90,6 +92,12 @@ def get_args():
     parser.add_argument("-ds", "--display_stats", action="store_true",
                         default=False, help="flag to show details")
 
+    parser.add_argument("-eel", "--exclude_english_lexicon", action="store_true", default=False,
+                        help="before generating queries, remove from frequency-based dictionary for the specified language any english words that coindicently occur in")
+    #parser.add_argument("-eul", "--exclude_udhr_lexicon", action="store_true", default=False,
+    #                    help="before generating queries, remove from frequency-based dictionary for the specified language any words that coindicently occur in the other versions of the Univeral Declaration of Human Rights in the directory 'udhr/'")
+
+        
     parser.add_argument("-squ", "--set_queries_unhandled", action="store_true",
                         default=False, help="Flag to mark all generated queries in the database as unhandled")
     parser.add_argument("-sdu", "--set_downloads_unhandled", action="store_true",
@@ -522,12 +530,15 @@ if __name__ == "__main__":
         # The following are now explicitly set to their config defaults if not give on CLI
         word_count       = globals.args.word_count
         query_count      = globals.args.query_count
+
         search_engine    = globals.args.search_engine
         use_selenium     = globals.args.use_selenium
         apply_robots_txt = globals.args.apply_robots_txt
-        num_threads      = globals.args.num_threads
         num_pages        = globals.args.num_pages
 
+        num_threads      = globals.args.num_threads
+
+        
         # Ensure the downloads directory exists
         downloads_dir = globals.config.get('downloads_dir')
         if not os.path.exists(downloads_dir):
@@ -548,12 +559,13 @@ if __name__ == "__main__":
         
         # Queries
         if globals.args.run_querygen or globals.args.run_all:
-            print("Generating Queries.")
-            queries_array = queries.generate_all(lang_uc, word_count, query_count)
+            print("Running Generate Queries Stage")
+            exclude_english_lexicon = globals.args.exclude_english_lexicon
+            queries_array = queries.generate_all(lang_uc, exclude_english_lexicon, word_count,query_count)
             
         # Search
         if globals.args.run_websearch or globals.args.run_all:
-            print("Running Search.")
+            print("Running Search Stage")
             # Get all relevant queries from the database
             tablequeries_rows = sql.get_all_queries(lang_uc, handled=False)
             # Split queries into sub-lists for each thread

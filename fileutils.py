@@ -56,6 +56,16 @@ def read_json(filename):
         return jsonc.load(file)
 
 
+def load_english_dictionary_ref():
+    """Load the English specific dictionary"""
+
+    word_dict = None
+    filename = os.path.join("dicts",f"english_words_ref.json")
+    with open(filename, "r", encoding="utf-8") as file:
+        word_dict = jsonc.load(file)
+
+    return word_dict
+    
 
 def load_language_dictionary(lang):
     """Load the dictionary for a specific language from its JSON file"""    
