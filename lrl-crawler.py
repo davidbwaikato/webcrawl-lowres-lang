@@ -11,8 +11,8 @@ import threading
 import time
 import traceback
 
-from fake_useragent import UserAgent
-from selenium import webdriver
+#from fake_useragent import UserAgent
+#from selenium import webdriver
 
 from lingua import Language
 requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
@@ -40,6 +40,7 @@ import nlp
 import queries
 import sql
 import search
+import seleniumutils
 
 
 stop_event = threading.Event()
@@ -129,57 +130,6 @@ def set_nlp_values_from_existing(url_id, file_hash):
     return 1
 
 
-_gecko_service = None
-
-def init_driver(driver_name):
-    global _gecko_service
-
-    # For working with webdriver-manager, see
-    #   https://pypi.org/project/webdriver-manager/
-    from selenium import webdriver
-
-    driver = None
-
-    ua = UserAgent()
-    user_agent = ua.random
-
-    if driver_name == "geckodriver":
-        
-        # **** XXXX
-        #from webdriver_manager.firefox import GeckoDriverManager
-        #executable_path = GeckoDriverManager().install()
-        
-        from selenium.webdriver.firefox.service import Service as FirefoxService
-        from webdriver_manager.firefox import GeckoDriverManager
-
-        from selenium.webdriver.firefox.options import Options
-
-        if _gecko_service == None:
-            # **** XXXX
-            # For now control the version, so it doesn't keep hitting the http://api.github.com/.../latest URL,
-            # as this turns out to be rate limited
-            _gecko_service = FirefoxService(GeckoDriverManager(version="v0.35.0").install())
-                    
-        options = Options()
-        options.add_argument(f'--user-agent={user_agent}')
-        options.add_argument("--headless")
-        driver = webdriver.Firefox(options=options, service=_gecko_service)
-    elif driver_name == "chromedriver":
-        # From Sulan's earlier work:
-        #   https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/116.0.5845.96/win64/chromedriver-win64.zip
-        
-        from selenium.webdriver.chrome.options import Options
-        
-        options = Options()
-        options.add_argument(f'--user-agent={user_agent}')
-
-        # Assume sourcing SETUP.bash puts the chromedriver on PATH, so no longer need to explicitly set this
-        #driver = webdriver.Chrome(chrome_options=options, executable_path=globals.config['chromedriver'])
-        driver = webdriver.Chrome(chrome_options=options)
-    
-    return driver
-
-
 def download_and_save(url_id, url, download_with_selenium,apply_robots_txt, downloads_dir, url_timeout=10):
 
     try:
@@ -239,7 +189,8 @@ def download_and_save(url_id, url, download_with_selenium,apply_robots_txt, down
             return 0
 
         if doc_type == "html" and download_with_selenium:
-            driver = init_driver(globals.config['driver'])
+            driver_type = globals.config['driver_type']
+            driver = seleniumutils.create_driver(driver_type)
             driver.get(url)
 
             # Working on the assumption that driver.get() only returns
@@ -297,7 +248,8 @@ def search_and_fetch(query_row, search_engine_type, num_pages=1, **kwargs):
 
     # Get where to save the data
     if search_engine_type == const.GOOGLE_SELENIUM or search_engine_type == const.BING_SELENIUM:
-        driver = init_driver(globals.config['driver'])        
+        driver_type = globals.config['driver_type']    
+        driver = seleniumutils.create_driver(driver_type)
 
     if search_engine_type == const.GOOGLE_SELENIUM:
         engine = const.GOOGLE
@@ -598,13 +550,17 @@ if __name__ == "__main__":
             print(f"Creating download directory: {downloads_dir}")
             os.makedirs(downloads_dir)
         
-        # Create the database
+        # Create the database if it does not already exist
         sql.create(reset=False)
         
         if globals.args.display_stats:
             display.stats(lang_uc)
             exit(0)
-                
+
+        if search_engine == const.GOOGLE_SELENIUM or search_engine == const.BING_SELENIUM:            
+            driver_type = globals.config['driver_type']
+            seleniumutils.init_manager(driver_type)
+        
         # Queries
         if globals.args.run_querygen or globals.args.run_all:
             print("Generating Queries.")
