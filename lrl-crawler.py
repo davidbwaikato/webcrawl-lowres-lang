@@ -64,8 +64,8 @@ def get_args():
     #                    help=f"search engine used [Config Default={globals.config['search_engine']}]")
     parser.add_argument("-se", "--search_engine", type=enums.SearchEngineType, choices=list(enums.SearchEngineType), default=globals.config['search_engine'],
                         help=f"search engine used [Config Default={globals.config['search_engine']}]")
-    parser.add_argument("-dws", "--download_with_selenium", action="store_true",
-                        default=False, help=f"use Selenium-controlled web browser for page downloads [Default=False]")
+    parser.add_argument("-us", "--use_selenium", action="store_true",
+                        default=False, help=f"use Selenium-controlled web browser for URL access such as page downloads [Default=False]")
     parser.add_argument("-art", "--apply_robots_txt", action="store_true",
                         default=False, help=f"use this option to turn on the robots.txt check (note: as the pages 'lrl-crawler.py' detects have been located via a web search engine, the identified download page has already been crawled, making it a reasonable assumption for 'lrl-crawler.pl' to skip this check, which is why it off by default) [Default=False]")
 
@@ -131,7 +131,7 @@ def set_nlp_values_from_existing(url_id, file_hash):
     return 1
 
 
-def download_and_save(url_id, url, download_with_selenium,apply_robots_txt, downloads_dir, url_timeout=10):
+def download_and_save(url_id, url, use_selenium,apply_robots_txt, downloads_dir, url_timeout=10):
 
     try:
         # Extract root domain from URL
@@ -189,7 +189,7 @@ def download_and_save(url_id, url, download_with_selenium,apply_robots_txt, down
             print("Unknown content type: ", content_type)
             return 0
 
-        if doc_type == "html" and download_with_selenium:
+        if doc_type == "html" and use_selenium:
             driver_type = globals.config['driver_type']
             driver = seleniumutils.create_driver(driver_type)
             driver.get(url)
@@ -238,7 +238,7 @@ def download_and_save(url_id, url, download_with_selenium,apply_robots_txt, down
             print(traceback.format_exc())        
         return 0
     
-def search_and_fetch(query_row, search_engine_type, num_pages=1, **kwargs):
+def search_and_fetch(query_row, search_engine_type,use_selenium, num_pages=1, **kwargs):
     """Fetch Google search results and update"""
     query_id = query_row['id']
     query_terms = query_row['query']
@@ -246,28 +246,29 @@ def search_and_fetch(query_row, search_engine_type, num_pages=1, **kwargs):
     driver = None
 
     # Get where to save the data
-    if search_engine_type == enums.SearchEngineType.GOOGLE_SELENIUM or search_engine_type == enums.SearchEngineType.BING_SELENIUM:
+    #if search_engine_type == enums.SearchEngineType.GOOGLE_SELENIUM or search_engine_type == enums.SearchEngineType.BING_SELENIUM:
+    if use_selenium:
         driver_type = globals.config['driver_type']    
         driver = seleniumutils.create_driver(driver_type)
 
-    if search_engine_type == enums.SearchEngineType.GOOGLE_SELENIUM:
-        engine = enums.SearchEngineType.GOOGLE
-    elif search_engine_type == enums.SearchEngineType.BING_SELENIUM:
-        engine = enums.SearchEngineType.BING
-    else:
-        engine = search_engine_type
+    #if search_engine_type == enums.SearchEngineType.GOOGLE_SELENIUM:
+    #    engine = enums.SearchEngineType.GOOGLE
+    #elif search_engine_type == enums.SearchEngineType.BING_SELENIUM:
+    #    engine = enums.SearchEngineType.BING
+    #else:
+    #    engine = search_engine_type
 
     count = 1
     urls = []
     while count <= num_pages:
-        if search_engine_type == enums.SearchEngineType.GOOGLE:
-            temp = search.google(query_terms, count)
-        elif search_engine_type == enums.SearchEngineType.GOOGLE_SELENIUM:
+        if use_selenium and search_engine_type == enums.SearchEngineType.GOOGLE:
             temp = search.google_selenium(query_terms, driver, count)
+        elif search_engine_type == enums.SearchEngineType.GOOGLE:
+            temp = search.google(query_terms, count)
+        elif use_selenium and search_engine_type == enums.SearchEngineType.BING:
+            temp = search.bing_selenium(query_terms, driver, count)
         elif search_engine_type == enums.SearchEngineType.BING:
             temp = search.bing(query_terms, count)
-        elif search_engine_type == enums.SearchEngineType.BING_SELENIUM:
-            temp = search.bing_selenium(query_terms, driver, count)
         elif search_engine_type == enums.SearchEngineType.GOOGLE_API:
             temp = search.google_api(query_terms, globals.config['google']['key'],globals.config['google']['cx'], count, **kwargs)
             if temp == 429:
@@ -304,12 +305,12 @@ def search_and_fetch(query_row, search_engine_type, num_pages=1, **kwargs):
     # Prepare the URL data for insertion
     # => not currently downloaded, so url downloaded=False and (nlp) handle=False
 
-    url_data = [{'query_id':query_id, 'type':engine.value, 'url':url, 'url_hash':fileutils.hash_url(url), 'downloaded':False, 'handled':False} for url in urls]
+    url_data = [{'query_id':query_id, 'type':search_engine_type.value, 'url':url, 'url_hash':fileutils.hash_url(url), 'downloaded':False, 'handled':False} for url in urls]
 
     # Insert URLs into the database (only the new ones)
     sql.insert_urls_many(url_data)
 
-def search_worker(sub_tablequeries_rows, search_engine_type, num_pages, tcount):
+def search_worker(sub_tablequeries_rows, search_engine_type,use_selenium, num_pages, tcount):
     for query_row in sub_tablequeries_rows:
         # Check if the stop event is set
         if stop_event.is_set():
@@ -318,7 +319,7 @@ def search_worker(sub_tablequeries_rows, search_engine_type, num_pages, tcount):
         now = datetime.now()
         print(f"Thread {tcount} ============ Search Stage @ {now.strftime('%H:%M:%S')} ============")
         print(f"Storing DB query row: {[query_row[key] for key in query_row.keys()]}")
-        search_and_fetch(query_row, search_engine_type, num_pages)
+        search_and_fetch(query_row, search_engine_type,use_selenium, num_pages)
 
         sleep_delay = globals.config['sleep_delay']
         randomized_sleep_delay = sleep_delay + random.randint(0,sleep_delay)
@@ -326,7 +327,7 @@ def search_worker(sub_tablequeries_rows, search_engine_type, num_pages, tcount):
         time.sleep(randomized_sleep_delay)
 
         
-def download_worker(sub_tableurls_rows, download_with_selenium,apply_robots_txt, tcount):
+def download_worker(sub_tableurls_rows, use_selenium,apply_robots_txt, tcount):
     for url_row in sub_tableurls_rows:
 
         url_id         = url_row['id']
@@ -344,7 +345,7 @@ def download_worker(sub_tableurls_rows, download_with_selenium,apply_robots_txt,
             if stop_event.is_set():
                 return
             
-            result = download_and_save(url_id, url_href, download_with_selenium,apply_robots_txt,
+            result = download_and_save(url_id, url_href, use_selenium,apply_robots_txt,
                                        globals.config['downloads_dir'], globals.config['url_timeout'])
             if result == 1:
                 print(f"Thread {tcount} ============ ============ EXISTING URL id {url_id}")
@@ -476,8 +477,13 @@ def validate_args(args):
                     f"Expected a positive integer, but got: {arg}")
             
         # Validate search_engine
-        valid_search_engine_types = [enums.SearchEngineType.GOOGLE, enums.SearchEngineType.GOOGLE_API, enums.SearchEngineType.GOOGLE_SELENIUM,
-                                     enums.SearchEngineType.BING,   enums.SearchEngineType.BING_API,   enums.SearchEngineType.BING_SELENIUM]
+        # **** XXXX
+        #valid_search_engine_types = [enums.SearchEngineType.GOOGLE, enums.SearchEngineType.GOOGLE_API, enums.SearchEngineType.GOOGLE_SELENIUM,
+        #                             enums.SearchEngineType.BING,   enums.SearchEngineType.BING_API,   enums.SearchEngineType.BING_SELENIUM]
+        #valid_search_engine_types = [enums.SearchEngineType.GOOGLE, enums.SearchEngineType.GOOGLE_API,
+        #                             enums.SearchEngineType.BING,   enums.SearchEngineType.BING_API]
+        valid_search_engine_types = list(enums.SearchEngineType)
+        
         if globals.args.search_engine and globals.args.search_engine not in valid_search_engine_types:
             raise ValueError(
                 f"Invalid search type provided: {globals.args.search_engine}. Valid options are: {valid_search_engine_types}")
@@ -529,11 +535,13 @@ if __name__ == "__main__":
         validate_args(globals.args)
 
         # The following are now explicitly set to their config defaults if not give on CLI
-        word_count    = globals.args.word_count
-        query_count   = globals.args.query_count
-        search_engine = globals.args.search_engine
-        num_threads   = globals.args.num_threads
-        num_pages     = globals.args.num_pages
+        word_count       = globals.args.word_count
+        query_count      = globals.args.query_count
+        search_engine    = globals.args.search_engine
+        use_selenium     = globals.args.use_selenium
+        apply_robots_txt = globals.args.apply_robots_txt
+        num_threads      = globals.args.num_threads
+        num_pages        = globals.args.num_pages
 
         # Ensure the downloads directory exists
         downloads_dir = globals.config.get('downloads_dir')
@@ -548,7 +556,8 @@ if __name__ == "__main__":
             display.stats(lang_uc)
             exit(0)
 
-        if search_engine == enums.SearchEngineType.GOOGLE_SELENIUM or search_engine == enums.SearchEngineType.BING_SELENIUM:            
+        #if search_engine == enums.SearchEngineType.GOOGLE_SELENIUM or search_engine == enums.SearchEngineType.BING_SELENIUM:            
+        if use_selenium:
             driver_type = globals.config['driver_type']
             seleniumutils.init_manager(driver_type)
         
@@ -570,7 +579,7 @@ if __name__ == "__main__":
             tcount = 1
             
             for sub_tablequeries_rows in split_tablequeries_rows:
-                t = threading.Thread(target=search_worker, args=(sub_tablequeries_rows, search_engine, num_pages, tcount))
+                t = threading.Thread(target=search_worker, args=(sub_tablequeries_rows, search_engine,use_selenium, num_pages, tcount))
                 threads.append(t)
                 t.start()
                 tcount += 1
@@ -602,8 +611,7 @@ if __name__ == "__main__":
             print("Starting nlp threads.")
             tcount = 1
             for sub_tableurls_rows in split_tableurls_rows:
-                t = threading.Thread(target=download_worker, args=(
-                    sub_tableurls_rows, globals.args.download_with_selenium,globals.args.apply_robots_txt,tcount))
+                t = threading.Thread(target=download_worker, args=(sub_tableurls_rows, use_selenium,apply_robots_txt,tcount))
                 threads.append(t)
                 t.start()
                 tcount += 1

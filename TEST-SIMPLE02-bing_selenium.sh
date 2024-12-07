@@ -12,8 +12,8 @@ rm -rf querydownloads-$lang.db downloads-$lang \
     && ./lrl-crawler.py \
 			--run_all \
 			--query_count 1 \
-			--search_engine bing_selenium \
-			--download_with_selenium \
+			--search_engine bing \
+			--use_selenium \
 			--num_threads 4 --num_pages 1 \
 			$EXTRA_ARGS \
 			$lang
