@@ -3,8 +3,8 @@ import base64
 import re
 import requests
 
-from bs4 import BeautifulSoup
-#from selenium.webdriver.common.by import By
+import bs4
+from selenium.webdriver.common.by import By
 from fake_useragent import UserAgent
 from urllib.parse import urlparse, parse_qs
 
@@ -53,7 +53,7 @@ def google(query,  page=1):
     if response.status_code != 200:
         return []
 
-    soup = BeautifulSoup(response.text, 'html.parser')
+    soup = bs4.BeautifulSoup(response.text, 'html.parser')
     result_items = soup.find_all('div',  {'class': 'g'})
 
     num_result_items = len(result_items)
@@ -213,7 +213,7 @@ def bing(query,  page=1):
     if response.status_code != 200:
         return []
     
-    soup = BeautifulSoup(response.text, 'html.parser')
+    soup = bs4.BeautifulSoup(response.text, 'html.parser')
     result_items = [h2 for h2 in (li.find('h2') for li in soup.find_all('li', {'class': 'b_algo'})) if h2]
 
     num_result_items = len(result_items)    

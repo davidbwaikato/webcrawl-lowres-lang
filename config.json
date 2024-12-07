@@ -16,7 +16,7 @@
     
     // Defaults for command-line args
     "word_count"    : 3,
-    "query_count"   : 5,
+    "query_count"   : 1, // For production use, set higher, e.g. 5
     "search_engine" : "google",
     "num_threads"   : 1, // For production use, set higher, e.g. 5 if CPU has 4 cores
     "num_pages"     : 1, // For production use, set higher, e.g., 10
@@ -24,8 +24,8 @@
     "url_timeout" : 10, // secs
     "sleep_delay" : 5,  // secs
     
-    "driver": "geckodriver",
-    //"driver": "chromedriver",
+    "driver_type": "geckodriver",
+    //"driver_type": "chromedriver",
     
     "excluded_domains": [
 	"www.ohchr.org",
@@ -49,7 +49,7 @@
 	"min_lingua_para_confidence"   : 0.98, 
 	
 	"min_termdist_para_word_len"   : 30,     // minimum number of words we want in a para, before Cosine-Similarity is applied
-	"min_termdist_para_confidence" : 0.4,
+	"min_termdist_para_confidence" : 0.5,
 	
 	//"min_para_confidence"     : 0.75,
 	"min_parachunk_word_len"      : 100, // minimum number of words we want in a concatenated para-chunk, before NLP/Cosine-Similarity is applied	
