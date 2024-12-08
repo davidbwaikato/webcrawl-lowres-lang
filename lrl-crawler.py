@@ -125,14 +125,24 @@ def set_nlp_values_from_existing(url_id, file_hash):
     # Clone across the values for 'doc_type', 'full_lang', 'confidence', 'paragraph_lan'
     #sql.update_url(url_id, file_hash, existing[6], existing[9], existing[11], existing[10])
 
-    doc_type      = existing[6]
-    full_lang     = existing[9]
-    confidence    = existing[11]
-    paragraph_lan = existing[10]
+    # **** XXXX YYYY
+    #doc_type      = existing[6]
+    #full_lang     = existing[9]
+    #confidence    = existing[11]
+    #paragraph_lan = existing[10]
 
+
+    doc_type      = existing['doc_type']        
+    full_lang     = existing['nlp_full_lang']
+    confidence    = existing['nlp_full_confidence']
+
+    nlp_para_count_lrl = existing['nlp_para_count_lrl']
+    nlp_para_count     = existing['nlp_para_count']
+    nlp_para_perc_lrl  = existing['nlp_para_perc_lrl']
+    
     # Clone the entry, based on the duplicate entry's values
-    update_url_fileinfo(url_id, file_hash, doc_type, downloaded=True)
-    update_url_langinfo(url_id, full_lang, confidence, paragraph_lan, handled=True)
+    sql.update_url_fileinfo(url_id, file_hash, doc_type, downloaded=True)
+    sql.update_url_langinfo(url_id, full_lang, confidence, nlp_para_count_lrl,nlp_para_count,nlp_para_perc_lrl, handled=True)
     
     return 1
 
@@ -378,7 +388,7 @@ def nlp_reject_downloaded_file(url_id,downloads_dir,url_filehash,url_doctype,rea
 def nlp_worker(sub_tableurls_rows, lang_dict_termvec_rec, detect_name, tcount):
 
     downloads_dir = globals.config['downloads_dir']
-    
+
     for url_row in sub_tableurls_rows:
 
         url_id         = url_row['id']
@@ -386,7 +396,7 @@ def nlp_worker(sub_tableurls_rows, lang_dict_termvec_rec, detect_name, tcount):
         url_filehash   = url_row['file_hash']
         url_doctype    = url_row['doc_type']        
         url_handled    = url_row['handled']
-        
+
         if url_handled == 1: # already handled it
             print(f"Thread {tcount}: Skipping as already NLP-processed (handled) URL {url_href}")
             continue
@@ -415,7 +425,7 @@ def nlp_worker(sub_tableurls_rows, lang_dict_termvec_rec, detect_name, tcount):
                 #
                 # As a result of calling this rountine, the existing NLP fields
                 # have been copied to the database entry for this url_id
-                return
+                continue
             
             extracted_text = nlp.extract_text_from_file(url_filepath, url_doctype)
             if extracted_text == None:

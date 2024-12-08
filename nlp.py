@@ -15,6 +15,10 @@ import globals
 from lingua import Language, LanguageDetectorBuilder
 
 
+_total_num_paras           = 0
+_total_processed_num_paras = 0
+_total_lrl_num_paras       = 0
+
 # import spacy
 # import nltk
 # from langdetect import DetectorFactory
@@ -95,10 +99,13 @@ def extract_text_from_file(filepath, doc_type):
             return text
     elif doc_type == "pdf":
         with open(filepath, 'rb') as f:
-            reader = PyPDF2.PdfReader(f)
             text = ""
-            for page in reader.pages:
-                text += page.extract_text()
+            try:
+                reader = PyPDF2.PdfReader(f)
+                for page in reader.pages:
+                    text += page.extract_text()
+            except Exception as e:
+                print(f"Error encountered when reading in PDF document: {e}")
             return text
     elif doc_type == "docx":
         doc = docx.Document(filepath)
@@ -110,6 +117,8 @@ def extract_text_from_file(filepath, doc_type):
 def convert_text_to_paras(text, min_para_word_len):
     """Return array of paragraphs to run language detection over"""
 
+    global _total_num_paras
+    
     #if (globals.verbose >= 5):
     #    verbose_char_len = globals.verbose*50
     #    print(f"++++ convert_text_to_paras() text[:{verbose_char_len}] ++++")
@@ -118,7 +127,9 @@ def convert_text_to_paras(text, min_para_word_len):
 
 
     paras = text_to_clean_paras(text)
-
+    num_paras = len(paras)
+    _total_num_paras += num_paras
+    
     if (globals.verbose >= 4):
         verbose_numpara_len = globals.verbose*10
         print(f"++++ convert_text_to_paras() paras[:{verbose_numpara_len}] ++++")
@@ -240,7 +251,14 @@ def process_text_in_chunksDEPRECATED(text, detect:Language):
     percentage = (count / total) * 100 if total > 0 else 0
     return percentage
 
-        
+# Precision and Recall Counts
+_pr_counts = {
+    'tp': 0,
+    'fp': 0,
+    'fn': 0
+}
+    
+
 def termdist_compute_language_confidence(para_chunk,lang_dict_termvec_rec):
 
     # **** XXXX refactor into function
@@ -253,7 +271,8 @@ def termdist_compute_language_confidence(para_chunk,lang_dict_termvec_rec):
     
     confidence = termdistribution.calc_cosine_similarity(para_termvec_rec,lang_dict_termvec_rec)
     return confidence
-    
+
+
 def detect_para_language_lingua(text,detect_langname, nlp_lang_supported, lang_dict_termvec_rec):
     """
     Working with (potetially contatenated paragraphs to reach config set min word count) 
@@ -261,6 +280,8 @@ def detect_para_language_lingua(text,detect_langname, nlp_lang_supported, lang_d
     on 'lang_dict_termvec_rec' and (if 'nlp_lang_supported') the Lingua-based one
     """
 
+    global _total_processed_num_paras
+    
     min_lingua_para_word_len     = globals.config['nlp']['min_lingua_para_word_len']
     min_lingua_para_confidence   = globals.config['nlp']['min_lingua_para_confidence']
 
@@ -278,6 +299,8 @@ def detect_para_language_lingua(text,detect_langname, nlp_lang_supported, lang_d
     # Process each paragraph and count language detection results
     num_paras = len(paras)
 
+    _total_processed_num_paras += num_paras
+    
     lrl_lingua_match_count  = 0
     lrl_lingua_match_paras  = []
 
@@ -305,6 +328,7 @@ def detect_para_language_lingua(text,detect_langname, nlp_lang_supported, lang_d
         lrl_termdist_para_confidence = termdist_compute_language_confidence(para,lang_dict_termvec_rec)
 
         show_para = False
+        show_prefix_matches = []
         
         if (globals.verbose >= 3):
             show_para = True
@@ -314,7 +338,8 @@ def detect_para_language_lingua(text,detect_langname, nlp_lang_supported, lang_d
             lrl_termdist_match_count += 1
             lrl_termdist_match_paras.append(para)
             show_para = True
-            
+            show_prefix_matches.append(f"CosSim-{detect_langname}")
+
         if nlp_lang_supported:
             if lrl_lingua_para_confidence >= min_lingua_para_confidence:
                     
@@ -322,14 +347,32 @@ def detect_para_language_lingua(text,detect_langname, nlp_lang_supported, lang_d
                 lrl_lingua_match_count += 1
                 lrl_lingua_match_paras.append(para)
                 show_para = True
+                show_prefix_matches.append(f"Lingua-{detect_langname}")
                 
-            if lrl_lingua_para_confidence >= min_lingua_para_confidence and lrl_termdist_para_confidence >= min_termdist_para_confidence:                
-                lrl_agreement_match_paras.append(para)
-                show_para = True
-                
+            if lrl_termdist_para_confidence >= min_termdist_para_confidence:
+                if lrl_lingua_para_confidence >= min_lingua_para_confidence:
+                    # True-positive NLP test                    
+                    lrl_agreement_match_paras.append(para)
+                    _pr_counts['tp'] += 1
+                    print("True-Positive")
+                else:
+                    # False-positive NLP test
+                    _pr_counts['fp'] += 1
+                    print("False-Positive")
+            else:
+                # Have a False-negative NLP test if NLP found the para to be LRL, but not the Cosine-Similarity test
+                if lrl_lingua_para_confidence >= min_lingua_para_confidence:
+                    _pr_counts['fn'] += 1
+                    print("False-Negative")
+                    
+
+        show_prefix = ""
+        if len(show_prefix_matches) > 0:
+            show_prefix = ",".join(show_prefix_matches) + ":\t"
+        
         if show_para:
             print( "----")
-            print(para)
+            print(f"{show_prefix}{para}")
             print( "----")
             print()
                         
@@ -347,6 +390,9 @@ def detect_para_language_lingua(text,detect_langname, nlp_lang_supported, lang_d
 
 def detect_language_lingua(text,  detect_langname, lang_dict_termvec_rec):
     """Detect language with confidence level using Lingua.py"""
+    global _total_num_paras
+    global _total_processed_num_paras
+    global _total_lrl_num_paras
 
     nlp_lang_supported = is_lingua_supported_lang(detect_langname)
     
@@ -379,10 +425,31 @@ def detect_language_lingua(text,  detect_langname, lang_dict_termvec_rec):
     lrl_lingua_match_count   = len(lrl_lingua_match_paras)
     lrl_termdist_match_count = len(lrl_termdist_match_paras)
 
-    lrl_match_count = lrl_lingua_match_count if (nlp_lang_supported) else lrl_termdist_match_count
-    
+    lrl_match_count = lrl_lingua_match_count if (nlp_lang_supported) else lrl_termdist_match_count    
     lrl_para_percentage = (lrl_match_count / num_paras) * 100 if num_paras > 0 else 0
-      
+
+    if (nlp_lang_supported):
+        _total_lrl_num_paras += lrl_lingua_match_count
+    else:
+        _total_lrl_num_paras += lrl_termdist_match_count
+        
+
+    print( "========")
+    print(f"Recall and Precision raw counts:{_pr_counts}")
+
+    precision = _pr_counts['tp'] / (_pr_counts['tp'] + _pr_counts['fp']) if (_pr_counts['tp'] > 0) and (_pr_counts['fp'] > 0) else 0
+    recall    = _pr_counts['tp'] / (_pr_counts['tp'] + _pr_counts['fn']) if (_pr_counts['tp'] > 0) and (_pr_counts['fn'] > 0) else 0
+
+    print( "----")
+    print(f"Precision = {precision}")
+    print(f"Recall    = {recall}")
+    print( "----")
+
+    print(f"Total number of paragraphs           = {_total_num_paras}")
+    print(f"Total number of processed paragraphs = {_total_processed_num_paras}")
+    print(f"Total number of lrl paragraphs       = {_total_lrl_num_paras}")
+    print( "========")
+    
     return {
         "full_lang": predicted_full_langname,
         "full_conf": round(lrl_lingua_fullconf, 2),

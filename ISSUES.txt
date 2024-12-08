@@ -2,16 +2,12 @@
 
 * eliminate all words in all UDHR files present ???
 
-* eliminate all English doubleups
-
-* change search enginge to enum
-
-* Have config option for loading in English full dict and removing any matches
-* Have config option for remove all matches that occur between the different UDHRs?
-
 * PDF text extract looks to be struggling with macrons
 
 * Support text/plain as one of the download times
+
+Unkown content type: text/plain
+(lrl-crawler.py)
 
 * Currently no way to trigger parachunking in config file
 

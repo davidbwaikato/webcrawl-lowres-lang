@@ -2,6 +2,10 @@
 from fake_useragent import UserAgent
 from selenium import webdriver
 
+# https://stackoverflow.com/questions/48450594/selenium-timed-out-receiving-message-from-renderer
+# driver.manage().timeouts().pageLoadTimeout(30L, TimeUnit.SECONDS) , driver.manage().timeouts().setScriptTimeout(3L, TimeUnit.SECONDS)
+
+
 # Consider refactoring to control the location where the webdriver is downloaded to
 #_webdriver_cache_dir = "./webdriver_cache"
 
@@ -16,10 +20,11 @@ def init_manager(driver_type):
         #manager = GeckoDriverManager(cache_valid_range=30, path=_webdriver_cache_dir)
         # Looks to now use a DownloadManager and CacheManager class
         
-        manager = GeckoDriverManager()
+        #manager = GeckoDriverManager()
         # If wanting to avoid the https://api.github.com/... API call to check what the latest
         # version is, then can specify a fixed version, for example:
-        #  GeckoDriverManager(version="v0.35.0")
+
+        manager = GeckoDriverManager(version="v0.35.0")
         # Look in your ~/.wdm/drivers/geckodriver/ to see what has already been downloaded
         
         # Returns the path to the installed webdriver (whether installing, or already installed in cache)

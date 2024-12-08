@@ -3,7 +3,7 @@
 import sys
 import argparse
 
-import const
+#import const
 import enums
 import extract
 import fileutils

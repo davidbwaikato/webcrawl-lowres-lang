@@ -199,7 +199,8 @@ def extract_database_downloaded(lang_initialcap,force, nlp_lang_supported,lang_d
     print(f"Processing langauge: {lang_initialcap}")
     lang_dict_termvec_rec = fileutils.load_language_dictionary_vector(lang_initialcap)    
     
-    urls = sql.get_all_urls_filter_downloaded_handled(downloaded=True, handled=True)
+    #urls = sql.get_all_urls_filter_downloaded_handled(downloaded=True, handled=True)
+    urls = sql.get_all_urls_filter_downloaded(downloaded=True)
     
     lang_all_paras = get_lang_paragraphs(urls,lang_uc, nlp_lang_supported,lang_detect_algorithm, lang_dict_termvec_rec)
 

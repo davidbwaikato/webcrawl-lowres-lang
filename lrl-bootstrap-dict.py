@@ -3,7 +3,7 @@
 from enum import Enum
 import argparse
 
-import const
+#import const
 import extract
 import fileutils
 import globals
